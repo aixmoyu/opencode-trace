@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="brandGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF512F"/>
+      <stop offset="100%" stop-color="#F09819"/>
+    </linearGradient>
+    
+    <style>
+      .path-anim {
+        stroke-dasharray: 440;
+        stroke-dashoffset: 440;
+        animation: draw 2.5s ease-in-out infinite alternate;
+      }
+      .pulse-anim {
+        animation: pulse 1.5s ease-in-out infinite alternate;
+      }
+      @keyframes draw {
+        0% { stroke-dashoffset: 440; }
+        100% { stroke-dashoffset: 0; }
+      }
+      @keyframes pulse {
+        0% { r: 8px; opacity: 1; }
+        100% { r: 20px; opacity: 0; }
+      }
+    </style>
+  </defs>
+
+  <rect width="120" height="120" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- 底层灰白轨道（更粗） -->
+  <polyline points="22,89 39,51 55,74 71,27 87,60 102,40" 
+            fill="none" stroke="#F1F5F9" stroke-width="9" 
+            stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 动态生长的 Agent 轨迹线（更粗） -->
+  <polyline class="path-anim"
+            points="22,89 39,51 55,74 71,27 87,60 102,40" 
+            fill="none" stroke="url(#brandGrad)" stroke-width="8" 
+            stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 静态中间节点（半径更大） -->
+  <circle cx="39" cy="51" r="8" fill="#ffffff" stroke="#F97316" stroke-width="3"/>
+  <circle cx="55" cy="74" r="8" fill="#ffffff" stroke="#F97316" stroke-width="3"/>
+  <circle cx="71" cy="27" r="8" fill="#ffffff" stroke="#F59E0B" stroke-width="3"/>
+  <circle cx="87" cy="60" r="8" fill="#ffffff" stroke="#F59E0B" stroke-width="3"/>
+  
+  <!-- 起始节点（半径更大） -->
+  <circle cx="22" cy="89" r="9" fill="#FF512F"/>
+
+  <!-- 终点（脉冲范围进一步内收） -->
+  <circle class="pulse-anim" cx="102" cy="40" r="8" fill="none" stroke="#F09819" stroke-width="3.5"/>
+  <circle cx="102" cy="40" r="8.5" fill="#F09819"/>
+</svg>

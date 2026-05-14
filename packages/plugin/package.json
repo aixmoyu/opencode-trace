@@ -1,0 +1,48 @@
+{
+  "name": "@opencode-trace/plugin",
+  "version": "0.0.2",
+  "type": "module",
+  "description": "OpenCode plugin for trace recording",
+  "main": "./dist/trace.js",
+  "types": "./dist/trace.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/trace.js",
+      "types": "./dist/trace.d.ts"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@opencode-trace/core": "0.0.2",
+    "@opencode-ai/plugin": "^1.14.22",
+    "@opencode-ai/sdk": "^1.14.41"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "vitest": "^4.1.5"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aixmoyu/opencode-trace.git",
+    "directory": "packages/plugin"
+  },
+  "keywords": [
+    "opencode",
+    "trace",
+    "plugin"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-04-30T00:00:00Z",
+  "title": "Design System: OpenCode Trace Viewer",
+  "extensions": {
+    "colorMeta": {
+      "warm-ink": {
+        "role": "primary",
+        "displayName": "Warm Ink",
+        "canonical": "oklch(22% 0.01 15)",
+        "tonalRamp": [
+          "oklch(10% 0.01 15)",
+          "oklch(15% 0.01 15)",
+          "oklch(22% 0.01 15)",
+          "oklch(30% 0.01 15)",
+          "oklch(40% 0.01 15)",
+          "oklch(50% 0.01 15)",
+          "oklch(60% 0.01 15)",
+          "oklch(70% 0.01 15)"
+        ]
+      },
+      "soft-cream": {
+        "role": "neutral",
+        "displayName": "Soft Cream",
+        "canonical": "oklch(99% 0.005 15)",
+        "tonalRamp": [
+          "oklch(85% 0.005 15)",
+          "oklch(88% 0.005 15)",
+          "oklch(91% 0.005 15)",
+          "oklch(94% 0.005 15)",
+          "oklch(96% 0.005 15)",
+          "oklch(98% 0.005 15)",
+          "oklch(99% 0.005 15)",
+          "oklch(99.5% 0.005 15)"
+        ]
+      },
+      "ash-gray": {
+        "role": "neutral",
+        "displayName": "Ash Gray",
+        "canonical": "oklch(65% 0.01 15)",
+        "tonalRamp": [
+          "oklch(30% 0.01 15)",
+          "oklch(40% 0.01 15)",
+          "oklch(50% 0.01 15)",
+          "oklch(65% 0.01 15)",
+          "oklch(75% 0.01 15)",
+          "oklch(85% 0.01 15)",
+          "oklch(92% 0.01 15)",
+          "oklch(97% 0.01 15)"
+        ]
+      },
+      "signal-blue": {
+        "role": "accent",
+        "displayName": "Signal Blue",
+        "canonical": "oklch(55% 0.19 250)",
+        "tonalRamp": [
+          "oklch(25% 0.19 250)",
+          "oklch(35% 0.19 250)",
+          "oklch(45% 0.19 250)",
+          "oklch(55% 0.19 250)",
+          "oklch(65% 0.19 250)",
+          "oklch(75% 0.15 250)",
+          "oklch(85% 0.10 250)",
+          "oklch(95% 0.05 250)"
+        ]
+      },
+      "alert-red": {
+        "role": "semantic",
+        "displayName": "Alert Red",
+        "canonical": "oklch(60% 0.22 25)",
+        "tonalRamp": [
+          "oklch(25% 0.22 25)",
+          "oklch(35% 0.22 25)",
+          "oklch(45% 0.22 25)",
+          "oklch(60% 0.22 25)",
+          "oklch(70% 0.18 25)",
+          "oklch(80% 0.12 25)",
+          "oklch(90% 0.08 25)",
+          "oklch(95% 0.04 25)"
+        ]
+      },
+      "success-green": {
+        "role": "semantic",
+        "displayName": "Success Green",
+        "canonical": "oklch(65% 0.18 145)",
+        "tonalRamp": [
+          "oklch(25% 0.18 145)",
+          "oklch(35% 0.18 145)",
+          "oklch(45% 0.18 145)",
+          "oklch(65% 0.18 145)",
+          "oklch(75% 0.14 145)",
+          "oklch(85% 0.10 145)",
+          "oklch(92% 0.06 145)",
+          "oklch(97% 0.03 145)"
+        ]
+      },
+      "caution-orange": {
+        "role": "semantic",
+        "displayName": "Caution Orange",
+        "canonical": "oklch(70% 0.18 70)",
+        "tonalRamp": [
+          "oklch(30% 0.18 70)",
+          "oklch(40% 0.18 70)",
+          "oklch(50% 0.18 70)",
+          "oklch(70% 0.18 70)",
+          "oklch(78% 0.14 70)",
+          "oklch(85% 0.10 70)",
+          "oklch(92% 0.06 70)",
+          "oklch(97% 0.03 70)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero headlines, page titles only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section titles, bold emphasis."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Standard text, paragraphs. Cap at 65-75ch."
+      },
+      "body-medium": {
+        "displayName": "Body Medium",
+        "purpose": "Links, button text, nav items."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Footnotes, metadata, small labels."
+      }
+    },
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Default easing for state transitions, minimal feedback."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action button, dark fill with light text.",
+      "html": "<button class=\"ds-btn-primary\">GET STARTED</button>",
+      "css": ".ds-btn-primary { background: #201d1d; color: #fdfcfc; padding: 4px 20px; border: none; border-radius: 4px; font-family: 'Berkeley Mono', monospace; font-size: 16px; font-weight: 500; cursor: pointer; transition: background 0.1s; } .ds-btn-primary:hover { background: #302c2c; } .ds-btn-primary:focus-visible { outline: 2px solid #007aff; outline-offset: 2px; }"
+    },
+    {
+      "name": "Input Text Field",
+      "kind": "input",
+      "refersTo": "input-text",
+      "description": "Form input with generous padding for typing comfort.",
+      "html": "<input type=\"text\" class=\"ds-input\" placeholder=\"Enter value\">",
+      "css": ".ds-input { background: #f8f7f7; color: #201d1d; padding: 20px; border: 1px solid rgba(15, 0, 0, 0.12); border-radius: 6px; font-family: 'Berkeley Mono', monospace; font-size: 16px; } .ds-input:focus { border-color: #007aff; outline: none; }"
+    },
+    {
+      "name": "Link",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Underlined link, weight 500, accent on hover.",
+      "html": "<a class=\"ds-link\">View details</a>",
+      "css": ".ds-link { color: #201d1d; text-decoration: underline; font-weight: 500; font-family: 'Berkeley Mono', monospace; transition: color 0.1s; } .ds-link:hover { color: #007aff; }"
+    },
+    {
+      "name": "Card Container",
+      "kind": "card",
+      "refersTo": null,
+      "description": "Flat container with warm border, no shadow.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\">Session</div><div class=\"ds-card-body\">Content</div></div>",
+      "css": ".ds-card { background: #302c2c; border: 1px solid rgba(15, 0, 0, 0.12); border-radius: 4px; padding: 16px; font-family: 'Berkeley Mono', monospace; } .ds-card-header { font-weight: 700; color: #fdfcfc; margin-bottom: 8px; } .ds-card-body { font-weight: 400; color: #9a9898; }"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": null,
+      "description": "Horizontal nav with underline links, solid dark background.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-nav-brand\">opencode-trace</span><a class=\"ds-nav-link\">Sessions</a><a class=\"ds-nav-link\">Docs</a></nav>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 24px; background: #201d1d; padding: 16px 24px; font-family: 'Berkeley Mono', monospace; } .ds-nav-brand { font-weight: 700; color: #fdfcfc; } .ds-nav-link { color: #fdfcfc; text-decoration: underline; font-weight: 500; font-size: 16px; } .ds-nav-link:hover { color: #007aff; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Debug Console",
+    "overview": "Analogous to a profiler or debugger: function-first, no marketing decoration, trustworthy accuracy. The visual system is built on warm minimalism: a near-black background with subtle reddish-brown warmth, paired with soft off-white text. Berkeley Mono is the sole typeface, creating a unified 'everything is code' philosophy where hierarchy is achieved through weight and scale alone. Flat by design. Depth is conveyed through border treatments and background color shifts, never shadows.",
+    "keyCharacteristics": [
+      "Berkeley Mono as the sole typeface",
+      "Warm near-black primary with reddish-brown undertone",
+      "Minimal 4px border radius",
+      "8px spacing grid",
+      "Apple HIG semantic colors",
+      "Flat elevation: no shadows"
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "The color palette is deliberately restrained. Primary and neutral tones carry 90%+ of the surface. Accent and semantic colors appear only where they signal meaning, not decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Weight Hierarchy Rule",
+        "body": "700 for headings, 500 for interactive emphasis, 400 for body. Three weight levels create the entire hierarchy. Never introduce a second font family.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat at rest. No elevation illusion, no ambient shadows. Hover and focus use opacity or border shifts, not lift.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use Warm Ink (#201d1d) for backgrounds, never pure black (#000000)",
+      "Do use Soft Cream (#fdfcfc) for text on dark, never pure white (#ffffff)",
+      "Do maintain the 8px spacing grid",
+      "Do keep surfaces flat: borders and background shifts only",
+      "Do use Berkeley Mono exclusively",
+      "Do cap body line length at 65-75ch"
+    ],
+    "donts": [
+      "Don't use border-left or border-right greater than 1px as a colored accent stripe",
+      "Don't use gradient text (background-clip: text with gradient)",
+      "Don't apply glassmorphism, blur effects decoratively",
+      "Don't create hero-metric templates",
+      "Don't build identical card grids",
+      "Don't introduce sans-serif or serif typefaces",
+      "Don't use shadows for elevation or hover states",
+      "Don't present raw data dumps without hierarchy"
+    ]
+  }
+}
