@@ -137,6 +137,30 @@ describe("StateManager - 记录写入", () => {
     const session = manager.getSession(sessionId);
     expect(session?.requestCount).toBe(1);
   });
+
+  test("writeRecord handles URLs with special characters", async () => {
+    const manager = new StateManager(testDir);
+    await manager.init();
+    const sessionId = manager.startSession();
+
+    const url = "https://example.com/?q=test' OR '1'='1";
+    await manager.writeRecord(sessionId, 1, {
+      id: 1,
+      requestAt: new Date().toISOString(),
+      responseAt: new Date().toISOString(),
+      request: { method: "GET", url, headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: ""
+    });
+
+    const session = manager.getSession(sessionId);
+    expect(session?.requestCount).toBe(1);
+
+    const filePath = join(testDir, sessionId, "1.json");
+    const saved = JSON.parse(readFileSync(filePath, "utf-8"));
+    expect(saved.request.url).toBe(url);
+  });
 });
 
 describe("StateManager - 优雅降级", () => {

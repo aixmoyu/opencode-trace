@@ -2,21 +2,19 @@ import { readdirSync, readFileSync, statSync, existsSync, mkdirSync, writeFileSy
 import { join } from "node:path";
 import archiver from "archiver";
 import AdmZip from "adm-zip";
-import { homedir } from "node:os";
+import { getTraceDir as getDefaultTraceDir } from "../platform.js";
 import type { TraceRecord } from "../types.js";
 import { StateManager, SessionState } from "../state/index.js";
 import { TraceRecordSchema } from "../schemas/types.js";
 import { SessionMetadataFileSchema } from "../schemas/store-types.js";
 import { logger } from "../logger.js";
 
-const DEFAULT_TRACE_DIR = join(homedir(), ".opencode-trace");
-
 export interface StoreOptions {
   traceDir?: string;
 }
 
 function resolveDir(options?: StoreOptions): string {
-  return options?.traceDir ?? DEFAULT_TRACE_DIR;
+  return options?.traceDir ?? getDefaultTraceDir();
 }
 
 export interface SessionMeta {

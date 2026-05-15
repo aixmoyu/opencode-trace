@@ -1,8 +1,38 @@
 import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import { TracePlugin } from "./plugin-instance.js";
-import { mkdtempSync, rmSync, readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+async function waitForFiles(dir: string, count: number, timeoutMs: number = 5000): Promise<void> {
+  const startTime = Date.now();
+  while (true) {
+    if (existsSync(dir)) {
+      const files = readdirSync(dir).filter(f => f.endsWith(".json"));
+      if (files.length >= count) {
+        let allValid = true;
+        for (const file of files) {
+          try {
+            const content = readFileSync(join(dir, file), "utf-8");
+            if (!content || content.length === 0) {
+              allValid = false;
+              break;
+            }
+            JSON.parse(content);
+          } catch {
+            allValid = false;
+            break;
+          }
+        }
+        if (allValid) return;
+      }
+    }
+    if (Date.now() - startTime > timeoutMs) {
+      throw new Error(`Timeout waiting for ${count} valid files in ${dir} after ${timeoutMs}ms`);
+    }
+    await new Promise(r => setTimeout(r, 10));
+  }
+}
 
 describe("Integration: TracePlugin full flow", () => {
   let tempDir: string;
@@ -42,9 +72,9 @@ describe("Integration: TracePlugin full flow", () => {
     const responses = await Promise.all(requests);
     expect(responses.every(r => r.status === 200)).toBe(true);
 
-    await new Promise(resolve => setTimeout(resolve, 200));
-
     const sessionDir = join(tempDir, sessionId);
+    await waitForFiles(sessionDir, 5);
+
     const files = readdirSync(sessionDir).filter(f => f.endsWith(".json")).sort();
     expect(files.length).toBe(5);
 

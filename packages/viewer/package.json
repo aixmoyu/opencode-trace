@@ -1,6 +1,6 @@
 {
   "name": "@opencode-trace/viewer",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "type": "module",
   "description": "Web viewer for opencode-trace",
   "bin": {
@@ -15,10 +15,10 @@
     "build:frontend": "vite build --config src/frontend/vite.config.ts",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "clean": "rm -rf dist *.tsbuildinfo"
+    "clean": "node ../../scripts/clean.mjs"
   },
   "dependencies": {
-    "@opencode-trace/core": "0.0.2",
+    "@opencode-trace/core": "0.0.3",
     "@fastify/cors": "^11.2.0",
     "@fastify/multipart": "^10.0.0",
     "@fastify/rate-limit": "^10.3.0",

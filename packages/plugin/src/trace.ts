@@ -1,7 +1,6 @@
-import type { Plugin, PluginModule, Hooks } from "@opencode-ai/plugin";
+import type { Plugin, PluginModule, Hooks, PluginInput } from "@opencode-ai/plugin";
 import type { Event, Session } from "@opencode-ai/sdk";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { logger } from "@opencode-trace/core";
 import { TracePlugin } from "./plugin-instance.js";
 
@@ -32,10 +31,6 @@ export interface TraceRecord {
   lastTokenAt?: number;
 }
 
-function getTraceDir(): string {
-  return join(homedir(), ".opencode-trace");
-}
-
 let testPlugin: TracePlugin | null = null;
 
 export function _resetForTesting(): void {
@@ -45,8 +40,8 @@ export function _resetForTesting(): void {
   }
 }
 
-const plugin: Plugin = async () => {
-  const traceDir = getTraceDir();
+const plugin: Plugin = async (input: PluginInput) => {
+  const traceDir = join(input.directory, ".opencode-trace");
   const instance = new TracePlugin(traceDir);
 
   instance.installInterceptor();

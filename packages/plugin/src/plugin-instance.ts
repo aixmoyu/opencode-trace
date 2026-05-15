@@ -2,6 +2,8 @@ import { AsyncWriteQueue } from "./write-queue.js";
 import { AsyncStateQueue } from "./state-queue.js";
 import { StateManager } from "@opencode-trace/core/state";
 import { redactHeaders } from "./redact.js";
+import { sanitizePath } from "@opencode-trace/core";
+import { homedir } from "node:os";
 
 import { logger } from "@opencode-trace/core";
 import type { TraceRecord, TraceRequest, TraceResponse } from "./trace.js";
@@ -187,11 +189,10 @@ export class TracePlugin {
 
   private sanitizeStackTrace(stack?: string): string | undefined {
     if (!stack) return undefined;
-    return stack
-      .replace(/\/home\/[^\/]+/g, '/home/[USER]')
-      .replace(/\/Users\/[^\/]+/g, '/Users/[USER]')
+    const userHome = homedir();
+    return sanitizePath(stack, userHome)
       .replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, '[IP]')
-      .replace(/:\d{4,5}(?=[\/\s]|$)/g, ':[PORT]');
+      .replace(/:\d{4,5}(?=[\/\\\s]|$)/g, ':[PORT]');
   }
 
   private createTraceRecord(

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, renameSync, statSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import initSqlJs, { Database, type SqlJsStatic } from "sql.js";
 import type { TraceRecord } from "../types.js";
@@ -130,7 +130,7 @@ export class StateManager {
     for (const migration of pending) {
       try {
         migration.migrate(this.db);
-        this.db.exec(`INSERT INTO schema_version (version) VALUES (${migration.version})`);
+        this.db.run("INSERT INTO schema_version (version) VALUES (?)", [migration.version]);
         logger.info("Database migration applied", { version: migration.version, traceDir: this.traceDir });
       } catch (err) {
         logger.error("Database migration failed", {
@@ -217,8 +217,7 @@ export class StateManager {
 
     for (const { key, value } of defaults) {
       if (!existingKeys.includes(key)) {
-        const escapedValue = value === null ? "NULL" : `'${value}'`;
-        this.db.exec(`INSERT INTO global_state (key, value) VALUES ('${key}', ${escapedValue})`);
+        this.db.run("INSERT INTO global_state (key, value) VALUES (?, ?)", [key, value]);
       }
     }
   }
@@ -239,7 +238,7 @@ export class StateManager {
   getGlobalState(key: string): string | null {
     if (!this.db) return null;
 
-    const result = this.db.exec(`SELECT value FROM global_state WHERE key = '${key}'`);
+    const result = this.db.exec("SELECT value FROM global_state WHERE key = ?", [key]);
     if (result.length === 0 || result[0].values.length === 0) return null;
     return result[0].values[0][0] as string | null;
   }
@@ -247,8 +246,7 @@ export class StateManager {
   setGlobalState(key: string, value: string | null): void {
     if (!this.db) return;
 
-    const escapedValue = value === null ? "NULL" : `'${value}'`;
-    this.db.exec(`UPDATE global_state SET value = ${escapedValue}, updated_at = CURRENT_TIMESTAMP WHERE key = '${key}'`);
+    this.db.run("UPDATE global_state SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?", [value, key]);
     this.persistDb();
   }
 
@@ -261,10 +259,7 @@ export class StateManager {
     }
 
     const now = new Date().toISOString();
-    this.db.exec(`
-      INSERT INTO sessions (id, status, started_at, request_count)
-      VALUES ('${id}', 'active', '${now}', 0)
-    `);
+    this.db.run("INSERT INTO sessions (id, status, started_at, request_count) VALUES (?, 'active', ?, 0)", [id, now]);
     this.setGlobalState("current_session", id);
 
     mkdirSync(join(this.traceDir, id), { recursive: true });
@@ -277,7 +272,7 @@ export class StateManager {
     if (!this.db) return;
 
     const now = new Date().toISOString();
-    this.db.exec(`UPDATE sessions SET status = 'stopped', ended_at = '${now}' WHERE id = '${sessionId}'`);
+    this.db.run("UPDATE sessions SET status = 'stopped', ended_at = ? WHERE id = ?", [now, sessionId]);
 
     const current = this.getGlobalState("current_session");
     if (current === sessionId) {
@@ -292,7 +287,7 @@ export class StateManager {
       return this.getSessionFromFs(sessionId);
     }
 
-    const result = this.db.exec(`SELECT id, status, started_at, ended_at, request_count FROM sessions WHERE id = '${sessionId}'`);
+    const result = this.db.exec("SELECT id, status, started_at, ended_at, request_count FROM sessions WHERE id = ?", [sessionId]);
     if (result.length === 0 || result[0].values.length === 0) return null;
 
     const row = result[0].values[0];
@@ -315,8 +310,8 @@ export class StateManager {
     const sessionDir = join(this.traceDir, sessionId);
     if (!existsSync(sessionDir)) {
       if (this.db) {
-        this.db.exec(`DELETE FROM sessions WHERE id = '${sessionId}'`);
-        this.db.exec(`DELETE FROM request_index WHERE session_id = '${sessionId}'`);
+        this.db.run("DELETE FROM sessions WHERE id = ?", [sessionId]);
+        this.db.run("DELETE FROM request_index WHERE session_id = ?", [sessionId]);
         this.setGlobalState("current_session", null);
         this.persistDb();
       }
@@ -337,11 +332,11 @@ export class StateManager {
 
     if (this.db) {
       try {
-        this.db.exec(`UPDATE sessions SET request_count = request_count + 1 WHERE id = '${sessionId}'`);
-        this.db.exec(`
-          INSERT INTO request_index (session_id, seq, url, method, purpose, request_at)
-          VALUES ('${sessionId}', ${seq}, '${record.request.url}', '${record.request.method}', '${record.purpose}', '${record.requestAt}')
-        `);
+        this.db.run("UPDATE sessions SET request_count = request_count + 1 WHERE id = ?", [sessionId]);
+        this.db.run(
+          "INSERT INTO request_index (session_id, seq, url, method, purpose, request_at) VALUES (?, ?, ?, ?, ?, ?)",
+          [sessionId, seq, record.request.url, record.request.method, record.purpose, record.requestAt]
+        );
         this.persistDb();
       } catch (err) {
         logger.error("Failed to update SQLite index for record", {
@@ -363,8 +358,8 @@ export class StateManager {
 
     for (const dbId of dbSessions) {
       if (!fsSessions.includes(dbId)) {
-        this.db.exec(`DELETE FROM sessions WHERE id = '${dbId}'`);
-        this.db.exec(`DELETE FROM request_index WHERE session_id = '${dbId}'`);
+        this.db.run("DELETE FROM sessions WHERE id = ?", [dbId]);
+        this.db.run("DELETE FROM request_index WHERE session_id = ?", [dbId]);
       }
     }
 
@@ -373,10 +368,10 @@ export class StateManager {
         const meta = this.getSessionFromFs(fsId);
         if (meta) {
           const now = new Date().toISOString();
-          this.db.exec(`
-            INSERT INTO sessions (id, status, started_at, ended_at, request_count, synced_at)
-            VALUES ('${fsId}', '${meta.status}', ${meta.startedAt ? `'${meta.startedAt}'` : 'NULL'}, ${meta.endedAt ? `'${meta.endedAt}'` : 'NULL'}, ${meta.requestCount}, '${now}')
-          `);
+          this.db.run(
+            "INSERT INTO sessions (id, status, started_at, ended_at, request_count, synced_at) VALUES (?, ?, ?, ?, ?, ?)",
+            [fsId, meta.status, meta.startedAt, meta.endedAt, meta.requestCount, now]
+          );
         }
       }
     }
@@ -416,7 +411,7 @@ export class StateManager {
       return entries.filter(e => {
         const full = join(this.traceDir, e);
         try {
-          const stat = require("fs").statSync(full);
+          const stat = statSync(full);
           return stat.isDirectory();
         } catch {
           return false;

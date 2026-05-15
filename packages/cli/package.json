@@ -1,6 +1,6 @@
 {
   "name": "@opencode-trace/cli",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "type": "module",
   "description": "CLI tool for opencode-trace",
   "bin": {
@@ -14,10 +14,10 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "clean": "rm -rf dist *.tsbuildinfo"
+    "clean": "node ../../scripts/clean.mjs"
   },
   "dependencies": {
-    "@opencode-trace/core": "0.0.2",
+    "@opencode-trace/core": "0.0.3",
     "adm-zip": "^0.5.17",
     "archiver": "^7.0.0",
     "marked": "^18.0.0"

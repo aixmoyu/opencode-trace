@@ -4,6 +4,26 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import entrypoint, { _resetForTesting } from "./trace.js";
 
+async function waitForFile(filePath: string, timeoutMs: number = 5000): Promise<void> {
+  const startTime = Date.now();
+  while (true) {
+    if (existsSync(filePath)) {
+      try {
+        const content = readFileSync(filePath, "utf-8");
+        if (content && content.length > 0) {
+          JSON.parse(content);
+          return;
+        }
+      } catch {
+      }
+    }
+    if (Date.now() - startTime > timeoutMs) {
+      throw new Error(`Timeout waiting for valid file ${filePath} after ${timeoutMs}ms`);
+    }
+    await new Promise(r => setTimeout(r, 10));
+  }
+}
+
 let testDir: string;
 
 beforeEach(() => {
@@ -228,11 +248,11 @@ describe("tracedFetch stream integration", () => {
     expect((response as any).__latencyMeta.firstTokenAt).not.toBeNull();
     expect((response as any).__latencyMeta.lastTokenAt).not.toBeNull();
 
-    await new Promise(resolve => setTimeout(resolve, 100));
-
     const traceDir = join(testDir, ".opencode-trace");
     const sessionDir = join(traceDir, sessionId);
     const recordFile = join(sessionDir, "1.json");
+
+    await waitForFile(recordFile, 5000);
 
     if (existsSync(recordFile)) {
       const record = JSON.parse(readFileSync(recordFile, "utf-8"));

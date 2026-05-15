@@ -12,7 +12,7 @@
     "build:frontend": "turbo run build:frontend",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "clean": "turbo run clean",
+    "clean": "node scripts/clean.mjs && turbo run clean",
     "cli": "node packages/cli/dist/index.js",
     "viewer": "node packages/viewer/dist/cli.js",
     "dev": "concurrently \"npm run dev:watch\" \"npm run dev:serve\"",

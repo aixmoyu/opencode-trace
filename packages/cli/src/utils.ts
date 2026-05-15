@@ -1,8 +1,7 @@
 import { resolve } from "node:path";
-import { homedir } from "node:os";
-import { store } from "@opencode-trace/core";
+import { store, getTraceDir } from "@opencode-trace/core";
 
-export const GLOBAL_TRACE_DIR = resolve(homedir(), ".opencode-trace");
+export const GLOBAL_TRACE_DIR = getTraceDir();
 export const LOCAL_TRACE_DIR = resolve(process.cwd(), ".opencode-trace");
 
 export interface ParsedFlags {

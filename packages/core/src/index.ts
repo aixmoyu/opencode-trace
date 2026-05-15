@@ -7,6 +7,7 @@ export * as state from "./state/index.js";
 export * as format from "./format/index.js";
 export * as schemas from "./schemas/index.js";
 export { logger } from "./logger.js";
+export { getTraceDir, sanitizePath } from "./platform.js";
 
 export type {
   TraceRequest,

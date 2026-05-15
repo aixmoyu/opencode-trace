@@ -30,7 +30,7 @@ describe("AsyncWriteQueue", () => {
 
     queue.enqueue("session-1", 1, record);
     
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await queue.flush();
     
     const filePath = join(tempDir, "session-1", "1.json");
     expect(existsSync(filePath)).toBe(true);
@@ -54,7 +54,7 @@ describe("AsyncWriteQueue", () => {
       queue.enqueue("batch-test", i + 1, records[i]);
     }
 
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await queue.flush();
 
     for (let i = 1; i <= 25; i++) {
       const filePath = join(tempDir, "batch-test", `${i}.json`);
@@ -62,7 +62,7 @@ describe("AsyncWriteQueue", () => {
     }
   });
 
-  test("enqueue writes to fallback directory when primary write fails", async () => {
+  test.skipIf(process.platform === "win32")("enqueue writes to fallback directory when primary write fails", async () => {
     const record = {
       id: 1,
       purpose: "fallback-test",
@@ -79,7 +79,7 @@ describe("AsyncWriteQueue", () => {
 
     queue.enqueue("readonly-session", 1, record);
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await queue.flush();
 
     await fs.chmod(sessionDir, 0o755);
 

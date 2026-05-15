@@ -40,7 +40,7 @@ describe("AsyncStateQueue", () => {
 
     queue.enqueue(sessionId, 1, record);
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await queue.flush();
 
     const session = stateManager.getSession(sessionId);
     expect(session?.requestCount).toBe(1);

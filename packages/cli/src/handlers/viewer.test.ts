@@ -45,7 +45,7 @@ describe('cmdViewer', () => {
 
     expect(mockSpawn).toHaveBeenCalledWith(
       'node',
-      [expect.stringContaining('viewer/cli.js'), '--port', '3000'],
+      [expect.stringMatching(/viewer[\/\\]cli\.js$/), '--port', '3000'],
       { stdio: 'inherit' }
     )
     expect(exitSpy).toHaveBeenCalledWith(0)

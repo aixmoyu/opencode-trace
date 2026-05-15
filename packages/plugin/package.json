@@ -1,6 +1,6 @@
 {
   "name": "@opencode-trace/plugin",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "type": "module",
   "description": "OpenCode plugin for trace recording",
   "main": "./dist/trace.js",
@@ -19,10 +19,10 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "clean": "rm -rf dist *.tsbuildinfo"
+    "clean": "node ../../scripts/clean.mjs"
   },
   "dependencies": {
-    "@opencode-trace/core": "0.0.2",
+    "@opencode-trace/core": "0.0.3",
     "@opencode-ai/plugin": "^1.14.22",
     "@opencode-ai/sdk": "^1.14.41"
   },

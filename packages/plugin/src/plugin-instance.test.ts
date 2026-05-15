@@ -1,8 +1,28 @@
 import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import { TracePlugin } from "./plugin-instance.js";
 import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
+
+async function waitForFile(filePath: string, timeoutMs: number = 5000): Promise<void> {
+  const startTime = Date.now();
+  while (true) {
+    if (existsSync(filePath)) {
+      try {
+        const content = readFileSync(filePath, "utf-8");
+        if (content && content.length > 0) {
+          JSON.parse(content);
+          return;
+        }
+      } catch {
+      }
+    }
+    if (Date.now() - startTime > timeoutMs) {
+      throw new Error(`Timeout waiting for valid file ${filePath} after ${timeoutMs}ms`);
+    }
+    await new Promise(r => setTimeout(r, 10));
+  }
+}
 
 describe("TracePlugin", () => {
   let tempDir: string;
@@ -92,11 +112,10 @@ describe("TracePlugin", () => {
       body: JSON.stringify({test: true})
     });
 
-    const response = await plugin.tracedFetch(request);
+const response = await plugin.tracedFetch(request);
     
-    await new Promise(resolve => setTimeout(resolve, 100));
-
     const filePath = join(tempDir, sessionId, "1.json");
+    await waitForFile(filePath, 5000);
     expect(existsSync(filePath)).toBe(true);
 
     const content = JSON.parse(readFileSync(filePath, "utf-8"));
@@ -106,22 +125,39 @@ describe("TracePlugin", () => {
 
   test("sanitizeStackTrace removes sensitive information", () => {
     const sanitizeStackTrace = plugin["sanitizeStackTrace"];
+    const userHome = homedir();
     
-    const stack = `Error at /home/li/sensitive/path/file.ts:10:5
-Error at /Users/john/private/project/src/index.ts:20:10
+    const stack = `Error at ${userHome}/sensitive/path/file.ts:10:5
 Connection to 192.168.1.100:8080 failed
 Server running on 127.0.0.1:3000`;
     
     const sanitized = sanitizeStackTrace(stack);
     
-    expect(sanitized).toContain('/home/[USER]');
-    expect(sanitized).toContain('/Users/[USER]');
+    expect(sanitized).toContain('[HOME]');
     expect(sanitized).toContain('[IP]');
     expect(sanitized).toContain(':[PORT]');
-    expect(sanitized).not.toContain('/home/li');
-    expect(sanitized).not.toContain('/Users/john');
+    expect(sanitized).not.toContain(userHome);
     expect(sanitized).not.toContain('192.168.1.100');
     expect(sanitized).not.toContain('127.0.0.1');
+    expect(sanitized).not.toContain(':8080');
+    expect(sanitized).not.toContain(':3000');
+  });
+
+  test("sanitizeStackTrace redacts ports in Windows paths", () => {
+    const sanitizeStackTrace = plugin["sanitizeStackTrace"];
+    const userHome = homedir();
+    
+    const windowsStack = `Error at ${userHome}\\project\\file.ts:10:5
+Connection to 10.0.0.1:8080 failed
+Listening on 0.0.0.0:3000`;
+    
+    const sanitized = sanitizeStackTrace(windowsStack);
+    
+    expect(sanitized).toContain('[HOME]');
+    expect(sanitized).toContain('[IP]');
+    expect(sanitized).toContain(':[PORT]');
+    expect(sanitized).not.toContain('10.0.0.1');
+    expect(sanitized).not.toContain('0.0.0.0');
     expect(sanitized).not.toContain(':8080');
     expect(sanitized).not.toContain(':3000');
   });

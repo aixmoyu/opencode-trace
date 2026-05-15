@@ -1,10 +1,9 @@
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { getTraceDir } from "../platform.js";
 import { StateManager, SessionState } from "../state/index.js";
 import { logger } from "../logger.js";
 
-const DEFAULT_TRACE_DIR = join(homedir(), ".opencode-trace");
 const RECORDING_MARKER = ".recording";
 
 export interface RecordingStatus {
@@ -14,7 +13,7 @@ export interface RecordingStatus {
 }
 
 function resolveDir(traceDir?: string): string {
-  return traceDir ?? DEFAULT_TRACE_DIR;
+  return traceDir ?? getTraceDir();
 }
 
 const managers = new Map<string, StateManager>();
