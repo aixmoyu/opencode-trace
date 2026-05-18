@@ -536,3 +536,22 @@ export async function deleteSession(
 
   rmSync(sessionDir, { recursive: true });
 }
+
+export async function deleteSessions(
+  sessionIds: string[],
+  options?: StoreOptions
+): Promise<{ deleted: string[]; errors: { sessionId: string; error: string }[] }> {
+  const deleted: string[] = [];
+  const errors: { sessionId: string; error: string }[] = [];
+
+  for (const sessionId of sessionIds) {
+    try {
+      await deleteSession(sessionId, options);
+      deleted.push(sessionId);
+    } catch (e) {
+      errors.push({ sessionId, error: (e as Error).message });
+    }
+  }
+
+  return { deleted, errors };
+}

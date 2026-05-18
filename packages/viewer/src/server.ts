@@ -386,6 +386,21 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
     }
   });
 
+  app.post("/api/sessions/batch-delete", async (req, reply) => {
+    try {
+      const body = req.body as { sessionIds?: string[] };
+      if (!body || !Array.isArray(body.sessionIds) || body.sessionIds.length === 0) {
+        reply.code(400);
+        return { error: "sessionIds must be a non-empty array" };
+      }
+      const result = await store.deleteSessions(body.sessionIds, storeOpts);
+      return { success: true, ...result };
+    } catch (e) {
+      reply.code(500);
+      return { error: "Batch delete failed: " + (e as Error).message };
+    }
+  });
+
   await app.listen({ port, host: "0.0.0.0" });
 
   const addr = `http://localhost:${port}`;

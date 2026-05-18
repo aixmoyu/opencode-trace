@@ -57,6 +57,26 @@
               <option value="created">Created</option>
             </select>
           </label>
+          <button
+            class="batch-toggle-btn"
+            :class="{ active: batchMode }"
+            @click="toggleBatchMode"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M3 12h18M3 18h18" />
+            </svg>
+            {{ batchMode ? 'Cancel' : 'Select' }}
+          </button>
+          <button
+            v-if="batchMode && selectedIds.size > 0"
+            class="batch-delete-btn"
+            @click="batchDelete"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+            Delete ({{ selectedIds.size }})
+          </button>
         </div>
       </div>
 
@@ -68,6 +88,14 @@
       <div v-else class="folder-groups">
         <div v-for="group in filteredGroups" :key="group.fullPath" class="folder-group">
           <div class="folder-header">
+            <label v-if="batchMode" class="batch-checkbox folder-checkbox" @click.stop>
+              <input
+                type="checkbox"
+                :checked="isFolderAllSelected(group)"
+                :indeterminate.prop="isFolderIndeterminate(group)"
+                @change="toggleFolderSelect(group)"
+              />
+            </label>
             <div class="folder-title">{{ group.projectName }}</div>
             <div class="folder-path">{{ group.fullPath }}</div>
             <span class="badge">{{ group.totalCount }} sessions</span>
@@ -80,10 +108,17 @@
                 tabindex="0"
                 role="button"
                 :aria-label="`View session ${node.title || node.id}`"
-                @click="router.push(`/session/${node.id}`)"
-                @keydown.enter="router.push(`/session/${node.id}`)"
+                @click="batchMode ? toggleSelect(node.id) : router.push(`/session/${node.id}`)"
+                @keydown.enter="batchMode ? toggleSelect(node.id) : router.push(`/session/${node.id}`)"
               >
                 <div class="session-card-header">
+                  <label v-if="batchMode" class="batch-checkbox" @click.stop>
+                    <input
+                      type="checkbox"
+                      :checked="selectedIds.has(node.id)"
+                      @change="toggleSelect(node.id)"
+                    />
+                  </label>
                   <div class="session-title-row">
                     <div class="session-card-content">
                       <div class="session-title">{{ node.title || node.id }}</div>
@@ -96,7 +131,7 @@
                       </div>
                     </div>
                   </div>
-                  <div class="session-card-actions" @click.stop>
+                  <div v-if="!batchMode" class="session-card-actions" @click.stop>
                     <div class="session-card-more">
                       <button
                         class="session-more-btn"
@@ -163,7 +198,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, inject, watch } from "vue";
 import { useRouter } from "vue-router";
-import { api, apiDelete } from "../composables/useApi";
+import { api, apiDelete, apiPost } from "../composables/useApi";
 import { relativeTime, getProjectName, esc } from "../utils/format";
 
 const router = useRouter();
@@ -196,6 +231,8 @@ const sortMode = ref("recent");
 const openMenuId = ref<string | null>(null);
 const expandedChildren = ref(new Set<string>());
 const searchInputRef = ref<HTMLInputElement | null>(null);
+const batchMode = ref(false);
+const selectedIds = ref(new Set<string>());
 
 const groups = computed(() => {
   const grouped = groupTreeByFolder(tree.value);
@@ -312,6 +349,71 @@ async function deleteSession(id: string) {
         await loadSessions();
       } catch (e) {
         showToast(`Delete failed: ${(e as Error).message}`, "error");
+      }
+    }
+  );
+}
+
+function toggleBatchMode() {
+  batchMode.value = !batchMode.value;
+  selectedIds.value = new Set();
+}
+
+function toggleSelect(id: string) {
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+  }
+  selectedIds.value = next;
+}
+
+function isFolderAllSelected(group: FolderGroup): boolean {
+  return group.sessions.length > 0 && group.sessions.every((s) => selectedIds.value.has(s.id));
+}
+
+function isFolderIndeterminate(group: FolderGroup): boolean {
+  const someSelected = group.sessions.some((s) => selectedIds.value.has(s.id));
+  const allSelected = group.sessions.every((s) => selectedIds.value.has(s.id));
+  return someSelected && !allSelected;
+}
+
+function toggleFolderSelect(group: FolderGroup) {
+  const next = new Set(selectedIds.value);
+  if (isFolderAllSelected(group)) {
+    for (const s of group.sessions) {
+      next.delete(s.id);
+    }
+  } else {
+    for (const s of group.sessions) {
+      next.add(s.id);
+    }
+  }
+  selectedIds.value = next;
+}
+
+function batchDelete() {
+  const ids = [...selectedIds.value];
+  showConfirm(
+    "Delete Sessions",
+    `Are you sure you want to delete ${ids.length} session${ids.length > 1 ? "s" : ""}? This action cannot be undone.`,
+    async () => {
+      try {
+        const res = await apiPost<{ deleted: string[]; errors: { sessionId: string; error: string }[] }>(
+          "sessions/batch-delete",
+          { sessionIds: ids },
+        );
+        if (res.errors && res.errors.length > 0) {
+          showToast(`${res.deleted.length} deleted, ${res.errors.length} failed`, "error");
+        } else {
+          showToast(`${res.deleted.length} session${res.deleted.length > 1 ? "s" : ""} deleted`, "success");
+        }
+        batchMode.value = false;
+        selectedIds.value = new Set();
+        await loadSessions();
+      } catch (e) {
+        showToast(`Batch delete failed: ${(e as Error).message}`, "error");
       }
     }
   );
@@ -599,5 +701,70 @@ defineExpose({ loadSessions });
 
 .child-card {
   padding: 10px 14px;
+}
+
+.batch-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.batch-toggle-btn:hover {
+  background: var(--bg-hover);
+}
+
+.batch-toggle-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.batch-delete-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger);
+  color: #fff;
+  font-family: var(--font-family);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.1s;
+}
+
+.batch-delete-btn:hover {
+  opacity: 0.85;
+}
+
+.batch-checkbox {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.batch-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.folder-checkbox {
+  margin-right: 12px;
 }
 </style>
