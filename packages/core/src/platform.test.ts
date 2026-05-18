@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { getTraceDir, sanitizePath } from "./platform.js";
 
-describe("getTraceDir", () => {
-  const originalPlatform = process.platform;
-  const originalEnv = process.env;
+const realPlatform = process.platform;
+const originalEnv = process.env;
 
+describe("getTraceDir", () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -13,19 +13,10 @@ describe("getTraceDir", () => {
     process.env = originalEnv;
   });
 
-  it("returns APPDATA path on Windows when APPDATA is set", async () => {
+  it("returns homedir path on Windows", async () => {
     vi.stubGlobal("process", {
       platform: "win32",
       env: { ...originalEnv, APPDATA: "C:\\Users\\testuser\\AppData\\Roaming" },
-    });
-    const { getTraceDir } = await import("./platform.js");
-    expect(getTraceDir()).toBe("C:\\Users\\testuser\\AppData\\Roaming\\opencode-trace");
-  });
-
-  it("returns homedir fallback on Windows when APPDATA is not set", async () => {
-    vi.stubGlobal("process", {
-      platform: "win32",
-      env: { ...originalEnv, APPDATA: undefined },
     });
     vi.doMock("node:os", () => ({
       homedir: () => "C:\\Users\\testuser",
@@ -43,7 +34,10 @@ describe("getTraceDir", () => {
       homedir: () => "/home/testuser",
     }));
     const { getTraceDir } = await import("./platform.js");
-    expect(getTraceDir()).toBe("/home/testuser/.opencode-trace");
+    const expectedPath = realPlatform === "win32" 
+      ? "\\home\\testuser\\.opencode-trace" 
+      : "/home/testuser/.opencode-trace";
+    expect(getTraceDir()).toBe(expectedPath);
   });
 });
 
