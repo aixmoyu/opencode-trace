@@ -1,8 +1,9 @@
-import { join } from "node:path";
+import path from "node:path";
 import { homedir } from "node:os";
 
 export function getTraceDir(): string {
-  return join(homedir(), ".opencode-trace");
+  const pathApi = process.platform === "win32" ? path.win32 : path.posix;
+  return pathApi.join(homedir(), ".opencode-trace");
 }
 
 export function sanitizePath(path: string, userHome: string): string {
