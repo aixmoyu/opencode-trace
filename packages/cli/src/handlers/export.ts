@@ -1,4 +1,4 @@
-import { writeFileSync, createWriteStream } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { store, parse, query, record, format } from "@opencode-trace/core";
 import { parseFlags, parseRange, inRange, findSessionTraceDir } from "../utils.js";
@@ -127,17 +127,9 @@ export async function cmdExport(args: string[]): Promise<void> {
 
     case "raw": {
       try {
-        const stream = await store.exportSessionZip(sessionId, { traceDir });
+        const buffer = await store.exportSessionZip(sessionId, { traceDir });
         const outputPath = resolve(flags.output as string);
-        const writeStream = createWriteStream(outputPath);
-
-        stream.pipe(writeStream);
-
-        await new Promise<void>((resolve, reject) => {
-          writeStream.on("finish", () => resolve());
-          writeStream.on("error", (err) => reject(err));
-          stream.on("error", (err) => reject(err));
-        });
+        writeFileSync(outputPath, buffer);
 
         console.log(JSON.stringify({ success: true, path: outputPath }));
         return;

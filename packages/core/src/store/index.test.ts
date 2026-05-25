@@ -25,13 +25,13 @@ describe("listSessionsTree", () => {
     const nonExistentDir = join(tmpdir(), "non-existent-trace-dir-" + Date.now());
     const warnSpy = vi.spyOn(logger, "warn");
     const errorSpy = vi.spyOn(logger, "error");
-    
+
     const tree = listSessionsTree({ traceDir: nonExistentDir });
-    
+
     expect(tree).toEqual([]);
     expect(errorSpy).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalled();
-    
+
     warnSpy.mockRestore();
     errorSpy.mockRestore();
   });
@@ -138,13 +138,13 @@ describe("exportSessionZip", () => {
   beforeEach(() => {
     if (existsSync(testTraceDir)) rmSync(testTraceDir, { recursive: true });
     mkdirSync(testSessionDir, { recursive: true });
-    
+
     // Create metadata.json
     writeFileSync(
       join(testSessionDir, "metadata.json"),
       JSON.stringify({ sessionId: "test-session-1", title: "Test Session", subSessions: [] })
     );
-    
+
     // Create trace records
     writeFileSync(
       join(testSessionDir, "1.json"),
@@ -158,7 +158,7 @@ describe("exportSessionZip", () => {
         error: null
       })
     );
-    
+
     writeFileSync(
       join(testSessionDir, "1.sse"),
       "data: test stream\n\n"
@@ -170,28 +170,9 @@ describe("exportSessionZip", () => {
   });
 
   it("should export single session without children", async () => {
-    const stream = await exportSessionZip("test-session-1", { traceDir: testTraceDir });
-    
-    // Collect stream data into buffer
-    const chunks: Buffer[] = [];
-    const writable = new Writable({
-      write(chunk, encoding, callback) {
-        chunks.push(chunk);
-        callback();
-      }
-    });
-    
-    stream.pipe(writable);
-    
-    await new Promise<void>((resolve, reject) => {
-      writable.on("finish", resolve);
-      writable.on("error", reject);
-    });
-    
-    const buffer = Buffer.concat(chunks);
+    const buffer = await exportSessionZip("test-session-1", { traceDir: testTraceDir });
     expect(buffer.length).toBeGreaterThan(0);
-    
-    // Verify it's a valid ZIP by checking magic bytes
+
     expect(buffer[0]).toBe(0x50); // 'P'
     expect(buffer[1]).toBe(0x4B); // 'K'
   });
@@ -206,12 +187,12 @@ describe("exportSessionZip", () => {
     // Create child session
     const childSessionDir = join(testTraceDir, "test-child-1");
     mkdirSync(childSessionDir, { recursive: true });
-    
+
     writeFileSync(
       join(childSessionDir, "metadata.json"),
       JSON.stringify({ sessionId: "test-child-1", title: "Child Session", parentID: "test-session-1" })
     );
-    
+
     writeFileSync(
       join(childSessionDir, "1.json"),
       JSON.stringify({
@@ -224,52 +205,31 @@ describe("exportSessionZip", () => {
         error: null
       })
     );
-    
+
     // Update parent metadata to include subSessions
     writeFileSync(
       join(testSessionDir, "metadata.json"),
       JSON.stringify({ sessionId: "test-session-1", title: "Test Session", subSessions: ["test-child-1"] })
     );
-    
-    const stream = await exportSessionZip("test-session-1", { traceDir: testTraceDir });
-    
-    // Collect stream data
-    const chunks: Buffer[] = [];
-    const writable = new Writable({
-      write(chunk, encoding, callback) {
-        chunks.push(chunk);
-        callback();
-      }
-    });
-    
-    stream.pipe(writable);
-    
-    await new Promise<void>((resolve, reject) => {
-      writable.on("finish", resolve);
-      writable.on("error", reject);
-    });
-    
-    const buffer = Buffer.concat(chunks);
+
+    const buffer = await exportSessionZip("test-session-1", { traceDir: testTraceDir });
     expect(buffer.length).toBeGreaterThan(0);
-    
-    // Verify ZIP magic bytes
+
     expect(buffer[0]).toBe(0x50); // 'P'
     expect(buffer[1]).toBe(0x4B); // 'K'
-    
-    // Verify ZIP contains both sessions by checking size is larger
-    // (More comprehensive test would extract and verify contents)
+
     expect(buffer.length).toBeGreaterThan(1000); // Should be larger with two sessions
   });
 });
 
 describe("importSessionZip", () => {
   const testImportDir = join(process.cwd(), "test-import-trace");
-  
+
   beforeEach(() => {
     if (existsSync(testImportDir)) rmSync(testImportDir, { recursive: true });
     mkdirSync(testImportDir, { recursive: true });
   });
-  
+
   afterEach(() => {
     if (existsSync(testImportDir)) rmSync(testImportDir, { recursive: true });
   });
@@ -283,14 +243,14 @@ describe("importSessionZip", () => {
         callback();
       }
     });
-    
+
     archive.pipe(writable);
-    
+
     archive.append(
       JSON.stringify({ sessionId: "import-test-1", title: "Imported Session" }),
       { name: "sessions/import-test-1/metadata.json" }
     );
-    
+
     archive.append(
       JSON.stringify({
         id: 1,
@@ -303,7 +263,7 @@ describe("importSessionZip", () => {
       }),
       { name: "sessions/import-test-1/1.json" }
     );
-    
+
     archive.append(
       JSON.stringify({
         exportedAt: "2025-04-30T12:00:00Z",
@@ -313,22 +273,22 @@ describe("importSessionZip", () => {
       }),
       { name: "manifest.json" }
     );
-    
+
     archive.finalize();
-    
+
     await new Promise<void>((resolve, reject) => {
       writable.on("finish", resolve);
       writable.on("error", reject);
     });
-    
+
     const zipBuffer = Buffer.concat(chunks);
-    
+
     const result = await importSessionZip(zipBuffer, { traceDir: testImportDir });
-    
+
     expect(result.status).toBe("success");
     expect(result.importedSessions).toHaveLength(1);
     expect(result.importedSessions![0].sessionId).toBe("import-test-1");
-    
+
     const importedMetadataPath = join(testImportDir, "import-test-1", "metadata.json");
     expect(existsSync(importedMetadataPath)).toBe(true);
   });
@@ -336,12 +296,12 @@ describe("importSessionZip", () => {
   it("should detect conflicts with prompt strategy", async () => {
     const existingDir = join(testImportDir, "conflict-test-1");
     mkdirSync(existingDir, { recursive: true });
-    
+
     writeFileSync(
       join(existingDir, "metadata.json"),
       JSON.stringify({ sessionId: "conflict-test-1", title: "Existing" })
     );
-    
+
     writeFileSync(
       join(existingDir, "1.json"),
       JSON.stringify({
@@ -354,7 +314,7 @@ describe("importSessionZip", () => {
         error: null
       })
     );
-    
+
     const archive = archiver("zip", { zlib: { level: 9 } });
     const chunks: Buffer[] = [];
     const writable = new Writable({
@@ -363,14 +323,14 @@ describe("importSessionZip", () => {
         callback();
       }
     });
-    
+
     archive.pipe(writable);
-    
+
     archive.append(
       JSON.stringify({ sessionId: "conflict-test-1", title: "Imported" }),
       { name: "sessions/conflict-test-1/metadata.json" }
     );
-    
+
     archive.append(
       JSON.stringify({
         id: 1,
@@ -383,7 +343,7 @@ describe("importSessionZip", () => {
       }),
       { name: "sessions/conflict-test-1/1.json" }
     );
-    
+
     archive.append(
       JSON.stringify({
         exportedAt: "2025-04-30T12:00:00Z",
@@ -393,21 +353,21 @@ describe("importSessionZip", () => {
       }),
       { name: "manifest.json" }
     );
-    
+
     archive.finalize();
-    
+
     await new Promise<void>((resolve, reject) => {
       writable.on("finish", resolve);
       writable.on("error", reject);
     });
-    
+
     const zipBuffer = Buffer.concat(chunks);
-    
-    const result = await importSessionZip(zipBuffer, { 
-      traceDir: testImportDir, 
-      conflictStrategy: "prompt" 
+
+    const result = await importSessionZip(zipBuffer, {
+      traceDir: testImportDir,
+      conflictStrategy: "prompt"
     });
-    
+
     expect(result.status).toBe("conflict");
     expect(result.conflicts).toHaveLength(1);
     expect(result.conflicts![0].sessionId).toBe("conflict-test-1");
@@ -416,12 +376,12 @@ describe("importSessionZip", () => {
   it("should rename conflicting sessions with rename strategy", async () => {
     const existingDir = join(testImportDir, "rename-test-1");
     mkdirSync(existingDir, { recursive: true });
-    
+
     writeFileSync(
       join(existingDir, "metadata.json"),
       JSON.stringify({ sessionId: "rename-test-1", title: "Existing" })
     );
-    
+
     writeFileSync(
       join(existingDir, "1.json"),
       JSON.stringify({
@@ -434,7 +394,7 @@ describe("importSessionZip", () => {
         error: null
       })
     );
-    
+
     const archive = archiver("zip", { zlib: { level: 9 } });
     const chunks: Buffer[] = [];
     const writable = new Writable({
@@ -443,14 +403,14 @@ describe("importSessionZip", () => {
         callback();
       }
     });
-    
+
     archive.pipe(writable);
-    
+
     archive.append(
       JSON.stringify({ sessionId: "rename-test-1", title: "Imported" }),
       { name: "sessions/rename-test-1/metadata.json" }
     );
-    
+
     archive.append(
       JSON.stringify({
         id: 1,
@@ -463,7 +423,7 @@ describe("importSessionZip", () => {
       }),
       { name: "sessions/rename-test-1/1.json" }
     );
-    
+
     archive.append(
       JSON.stringify({
         exportedAt: "2025-04-30T12:00:00Z",
@@ -473,38 +433,38 @@ describe("importSessionZip", () => {
       }),
       { name: "manifest.json" }
     );
-    
+
     archive.finalize();
-    
+
     await new Promise<void>((resolve, reject) => {
       writable.on("finish", resolve);
       writable.on("error", reject);
     });
-    
+
     const zipBuffer = Buffer.concat(chunks);
-    
-    const result = await importSessionZip(zipBuffer, { 
-      traceDir: testImportDir, 
-      conflictStrategy: "rename" 
+
+    const result = await importSessionZip(zipBuffer, {
+      traceDir: testImportDir,
+      conflictStrategy: "rename"
     });
-    
+
     expect(result.status).toBe("success");
     expect(result.importedSessions).toHaveLength(1);
     expect(result.importedSessions![0].sessionId).toBe("rename-test-1");
     expect(result.importedSessions![0].newId).toBe("rename-test-1-imported");
-    
+
     expect(existsSync(join(testImportDir, "rename-test-1-imported"))).toBe(true);
   });
 });
 
 describe("deleteSession", () => {
   const testDeleteDir = join(process.cwd(), "test-delete-trace");
-  
+
   beforeEach(() => {
     if (existsSync(testDeleteDir)) rmSync(testDeleteDir, { recursive: true });
     mkdirSync(testDeleteDir, { recursive: true });
   });
-  
+
   afterEach(() => {
     if (existsSync(testDeleteDir)) rmSync(testDeleteDir, { recursive: true });
   });
@@ -514,9 +474,9 @@ describe("deleteSession", () => {
     mkdirSync(sessionDir, { recursive: true });
     writeFileSync(join(sessionDir, "metadata.json"), JSON.stringify({ sessionId: "delete-test-1" }));
     writeFileSync(join(sessionDir, "1.json"), JSON.stringify({ id: 1 }));
-    
+
     await deleteSession("delete-test-1", { traceDir: testDeleteDir });
-    
+
     expect(existsSync(sessionDir)).toBe(false);
   });
 
@@ -528,23 +488,23 @@ describe("deleteSession", () => {
       subSessions: ["child-1", "child-2"]
     }));
     writeFileSync(join(parentDir, "1.json"), JSON.stringify({ id: 1 }));
-    
+
     const child1Dir = join(testDeleteDir, "child-1");
     mkdirSync(child1Dir, { recursive: true });
     writeFileSync(join(child1Dir, "metadata.json"), JSON.stringify({
       sessionId: "child-1",
       parentID: "parent-session"
     }));
-    
+
     const child2Dir = join(testDeleteDir, "child-2");
     mkdirSync(child2Dir, { recursive: true });
     writeFileSync(join(child2Dir, "metadata.json"), JSON.stringify({
       sessionId: "child-2",
       parentID: "parent-session"
     }));
-    
+
     await deleteSession("parent-session", { traceDir: testDeleteDir });
-    
+
     expect(existsSync(parentDir)).toBe(false);
     expect(existsSync(child1Dir)).toBe(false);
     expect(existsSync(child2Dir)).toBe(false);

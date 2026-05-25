@@ -359,7 +359,7 @@ export function writeSessionMetadata(
 export async function exportSessionZip(
   sessionId: string,
   options?: StoreOptions
-): Promise<NodeJS.ReadableStream> {
+): Promise<Buffer> {
   const traceDir = resolveDir(options);
   const sessionDir = join(traceDir, sessionId);
 
@@ -368,18 +368,16 @@ export async function exportSessionZip(
   }
 
   const metadata = readSessionMetadata(sessionId, traceDir);
-  const subSessions = metadata?.subSessions || [];
+  const storedSubSessions = metadata?.subSessions || [];
 
-  const allSessionIds = [sessionId, ...subSessions];
+  const allSessions = listSessions({ traceDir });
+  const discoveredChildren = allSessions
+    .filter(s => s.parentID === sessionId)
+    .map(s => s.id);
 
-  const archive = archiver("zip", { zlib: { level: 9 } });
+  const allSubSessions = [...new Set([...storedSubSessions, ...discoveredChildren])];
 
-  for (const id of allSessionIds) {
-    const dir = join(traceDir, id);
-    if (existsSync(dir)) {
-      archive.directory(dir, join("sessions", id));
-    }
-  }
+  const allSessionIds = [sessionId, ...allSubSessions];
 
   const manifest: ExportManifest = {
     exportedAt: new Date().toISOString(),
@@ -388,11 +386,33 @@ export async function exportSessionZip(
     version: "1.0"
   };
 
-  archive.append(JSON.stringify(manifest, null, 2), { name: "manifest.json" });
+  return new Promise<Buffer>((resolve, reject) => {
+    const archive = archiver("zip", { zlib: { level: 9 } });
+    const chunks: Buffer[] = [];
 
-  archive.finalize();
+    archive.on("error", (err) => {
+      reject(new Error("Failed to create archive: " + err.message));
+    });
 
-  return archive;
+    archive.on("data", (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+
+    archive.on("end", () => {
+      resolve(Buffer.concat(chunks));
+    });
+
+    for (const id of allSessionIds) {
+      const dir = join(traceDir, id);
+      if (existsSync(dir)) {
+        archive.directory(dir, join("sessions", id));
+      }
+    }
+
+    archive.append(JSON.stringify(manifest, null, 2), { name: "manifest.json" });
+
+    archive.finalize();
+  });
 }
 
 export interface ImportResult {
@@ -539,9 +559,16 @@ export async function deleteSession(
   }
 
   const metadata = readSessionMetadata(sessionId, traceDir);
-  const subSessions = metadata?.subSessions || [];
+  const storedSubSessions = metadata?.subSessions || [];
 
-  for (const childId of subSessions) {
+  const allSessions = listSessions({ traceDir });
+  const discoveredChildren = allSessions
+    .filter(s => s.parentID === sessionId)
+    .map(s => s.id);
+
+  const allSubSessions = [...new Set([...storedSubSessions, ...discoveredChildren])];
+
+  for (const childId of allSubSessions) {
     const childDir = join(traceDir, childId);
     if (existsSync(childDir)) {
       rmSync(childDir, { recursive: true });
@@ -572,25 +599,25 @@ export async function deleteSessions(
 
 export function listSessionsFromBothDirs(options: BothDirsOptions): SessionMetaWithScope[] {
   const { globalDir, localDir } = options;
-  
+
   const globalSessions = listSessions({ traceDir: globalDir }).map(s => ({ ...s, scope: "global" as const }));
-  
+
   if (!localDir) {
     return globalSessions;
   }
-  
+
   const localSessions = listSessions({ traceDir: localDir }).map(s => ({ ...s, scope: "local" as const }));
-  
+
   const sessionMap = new Map<string, SessionMetaWithScope>();
-  
+
   for (const session of globalSessions) {
     sessionMap.set(session.id, session);
   }
-  
+
   for (const session of localSessions) {
     sessionMap.set(session.id, session);
   }
-  
+
   return Array.from(sessionMap.values()).sort(
     (a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
   );
@@ -599,7 +626,7 @@ export function listSessionsFromBothDirs(options: BothDirsOptions): SessionMetaW
 export function listSessionsTreeFromBothDirs(options: BothDirsOptions): SessionTreeNodeWithScope[] {
   const sessions = listSessionsFromBothDirs(options);
   const tree: SessionTreeNodeWithScope[] = [];
-  
+
   for (const session of sessions) {
     if (!session.parentID) {
       const children = sessions.filter(s => s.parentID === session.id);
@@ -610,7 +637,7 @@ export function listSessionsTreeFromBothDirs(options: BothDirsOptions): SessionT
       tree.push(node);
     }
   }
-  
+
   return tree.sort((a, b) =>
     (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
   );

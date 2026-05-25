@@ -373,12 +373,12 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
         reply.code(404);
         return { error: "Session not found" };
       }
-      const stream = await store.exportSessionZip(sessionId, { traceDir: sessionTraceDir });
+      const buffer = await store.exportSessionZip(sessionId, { traceDir: sessionTraceDir });
 
       reply
         .type("application/zip")
         .header("Content-Disposition", `attachment; filename="session-${sessionId}.zip"`)
-        .send(stream);
+        .send(buffer);
     } catch (e) {
       const err = e as Error;
       if (err.message === "Session not found") {
