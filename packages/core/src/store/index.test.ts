@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
-import { listSessionsTree, listSessions, exportSessionZip, importSessionZip, deleteSession } from "./index.js";
+import { listSessionsTree, listSessions, exportSessionZip, importSessionZip, deleteSession, listSessionsFromBothDirs, listSessionsTreeFromBothDirs } from "./index.js";
 import archiver from "archiver";
 import { logger } from "../logger.js";
 
@@ -554,5 +554,193 @@ describe("deleteSession", () => {
     await expect(
       deleteSession("non-existent", { traceDir: testDeleteDir })
     ).rejects.toThrow("Session not found");
+  });
+});
+
+describe("listSessionsFromBothDirs", () => {
+  let globalDir: string;
+  let localDir: string;
+
+  beforeEach(() => {
+    globalDir = mkdtempSync(join(tmpdir(), "global-trace-"));
+    localDir = mkdtempSync(join(tmpdir(), "local-trace-"));
+  });
+
+  afterEach(() => {
+    rmSync(globalDir, { recursive: true, force: true });
+    rmSync(localDir, { recursive: true, force: true });
+  });
+
+  it("merges sessions from both global and local dirs", () => {
+    mkdirSync(join(globalDir, "session-global"), { recursive: true });
+    writeFileSync(join(globalDir, "session-global", "metadata.json"), JSON.stringify({ title: "Global Session" }));
+    writeFileSync(join(globalDir, "session-global", "1.json"), JSON.stringify({
+      id: 1,
+      requestAt: "2024-01-01T00:00:00Z",
+      responseAt: "2024-01-01T00:01:00Z",
+      request: { method: "POST", url: "http://test", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: ""
+    }));
+
+    mkdirSync(join(localDir, "session-local"), { recursive: true });
+    writeFileSync(join(localDir, "session-local", "metadata.json"), JSON.stringify({ title: "Local Session" }));
+    writeFileSync(join(localDir, "session-local", "1.json"), JSON.stringify({
+      id: 1,
+      requestAt: "2024-01-02T00:00:00Z",
+      responseAt: "2024-01-02T00:01:00Z",
+      request: { method: "POST", url: "http://test", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: ""
+    }));
+
+    const sessions = listSessionsFromBothDirs({ globalDir, localDir });
+
+    expect(sessions.length).toBe(2);
+    expect(sessions.find((s: any) => s.id === "session-global")).toBeDefined();
+    expect(sessions.find((s: any) => s.id === "session-local")).toBeDefined();
+    expect(sessions.find((s: any) => s.id === "session-global")?.scope).toBe("global");
+    expect(sessions.find((s: any) => s.id === "session-local")?.scope).toBe("local");
+  });
+
+  it("deduplicates sessions that exist in both dirs", () => {
+    mkdirSync(join(globalDir, "session-dup"), { recursive: true });
+    writeFileSync(join(globalDir, "session-dup", "metadata.json"), JSON.stringify({ title: "Dup Global" }));
+    writeFileSync(join(globalDir, "session-dup", "1.json"), JSON.stringify({
+      id: 1,
+      requestAt: "2024-01-01T00:00:00Z",
+      responseAt: "2024-01-01T00:01:00Z",
+      request: { method: "POST", url: "http://test", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: ""
+    }));
+
+    mkdirSync(join(localDir, "session-dup"), { recursive: true });
+    writeFileSync(join(localDir, "session-dup", "metadata.json"), JSON.stringify({ title: "Dup Local" }));
+    writeFileSync(join(localDir, "session-dup", "1.json"), JSON.stringify({
+      id: 1,
+      requestAt: "2024-01-02T00:00:00Z",
+      responseAt: "2024-01-02T00:01:00Z",
+      request: { method: "POST", url: "http://test", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: ""
+    }));
+
+    const sessions = listSessionsFromBothDirs({ globalDir, localDir });
+
+    expect(sessions.length).toBe(1);
+    expect(sessions[0].id).toBe("session-dup");
+    expect(sessions[0].scope).toBe("local");
+  });
+
+  it("returns empty array when both dirs are empty", () => {
+    const sessions = listSessionsFromBothDirs({ globalDir, localDir });
+    expect(sessions).toEqual([]);
+  });
+
+  it("uses globalDir as default when localDir is not provided", () => {
+    mkdirSync(join(globalDir, "session-only"), { recursive: true });
+    writeFileSync(join(globalDir, "session-only", "metadata.json"), JSON.stringify({ title: "Only Session" }));
+    writeFileSync(join(globalDir, "session-only", "1.json"), JSON.stringify({
+      id: 1,
+      requestAt: "2024-01-01T00:00:00Z",
+      responseAt: "2024-01-01T00:01:00Z",
+      request: { method: "POST", url: "http://test", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: ""
+    }));
+
+    const sessions = listSessionsFromBothDirs({ globalDir });
+    expect(sessions.length).toBe(1);
+    expect(sessions[0].id).toBe("session-only");
+    expect(sessions[0].scope).toBe("global");
+  });
+});
+
+describe("listSessionsTreeFromBothDirs", () => {
+  let globalDir: string;
+  let localDir: string;
+
+  beforeEach(() => {
+    globalDir = mkdtempSync(join(tmpdir(), "global-tree-"));
+    localDir = mkdtempSync(join(tmpdir(), "local-tree-"));
+  });
+
+  afterEach(() => {
+    rmSync(globalDir, { recursive: true, force: true });
+    rmSync(localDir, { recursive: true, force: true });
+  });
+
+  it("builds tree from both dirs with parent-child relationships", () => {
+    mkdirSync(join(globalDir, "parent-g"), { recursive: true });
+    writeFileSync(join(globalDir, "parent-g", "metadata.json"), JSON.stringify({ title: "Parent Global" }));
+    writeFileSync(join(globalDir, "parent-g", "1.json"), JSON.stringify({
+      id: 1,
+      requestAt: "2024-01-01T00:00:00Z",
+      responseAt: "2024-01-01T00:01:00Z",
+      request: { method: "POST", url: "http://test", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: ""
+    }));
+
+    mkdirSync(join(localDir, "child-l"), { recursive: true });
+    writeFileSync(join(localDir, "child-l", "metadata.json"), JSON.stringify({ parentID: "parent-g" }));
+    writeFileSync(join(localDir, "child-l", "1.json"), JSON.stringify({
+      id: 1,
+      requestAt: "2024-01-02T00:00:00Z",
+      responseAt: "2024-01-02T00:01:00Z",
+      request: { method: "POST", url: "http://test", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: ""
+    }));
+
+    const tree = listSessionsTreeFromBothDirs({ globalDir, localDir });
+
+    expect(tree.length).toBe(1);
+    expect(tree[0].id).toBe("parent-g");
+    expect(tree[0].children.length).toBe(1);
+    expect(tree[0].children[0].id).toBe("child-l");
+    expect(tree[0].scope).toBe("global");
+    expect(tree[0].children[0].scope).toBe("local");
+  });
+
+  it("deduplicates parent nodes preferring local", () => {
+    mkdirSync(join(globalDir, "parent-dup"), { recursive: true });
+    writeFileSync(join(globalDir, "parent-dup", "metadata.json"), JSON.stringify({ title: "Parent Global" }));
+    writeFileSync(join(globalDir, "parent-dup", "1.json"), JSON.stringify({
+      id: 1,
+      requestAt: "2024-01-01T00:00:00Z",
+      responseAt: "2024-01-01T00:01:00Z",
+      request: { method: "POST", url: "http://test", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: ""
+    }));
+
+    mkdirSync(join(localDir, "parent-dup"), { recursive: true });
+    writeFileSync(join(localDir, "parent-dup", "metadata.json"), JSON.stringify({ title: "Parent Local" }));
+    writeFileSync(join(localDir, "parent-dup", "1.json"), JSON.stringify({
+      id: 1,
+      requestAt: "2024-01-02T00:00:00Z",
+      responseAt: "2024-01-02T00:01:00Z",
+      request: { method: "POST", url: "http://test", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: ""
+    }));
+
+    const tree = listSessionsTreeFromBothDirs({ globalDir, localDir });
+
+    expect(tree.length).toBe(1);
+    expect(tree[0].id).toBe("parent-dup");
+    expect(tree[0].title).toBe("Parent Local");
+    expect(tree[0].scope).toBe("local");
   });
 });

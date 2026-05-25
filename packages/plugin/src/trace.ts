@@ -1,6 +1,7 @@
 import type { Plugin, PluginModule, Hooks, PluginInput } from "@opencode-ai/plugin";
 import type { Event, Session } from "@opencode-ai/sdk";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { logger } from "@opencode-trace/core";
 import { TracePlugin } from "./plugin-instance.js";
 
@@ -41,8 +42,9 @@ export function _resetForTesting(): void {
 }
 
 const plugin: Plugin = async (input: PluginInput) => {
-  const traceDir = join(input.directory, ".opencode-trace");
-  const instance = new TracePlugin(traceDir);
+  const globalDir = join(homedir(), ".opencode-trace");
+  const localDir = join(input.directory, ".opencode-trace");
+  const instance = new TracePlugin(globalDir, localDir);
 
   instance.installInterceptor();
   await instance.initStateManager();
@@ -130,6 +132,36 @@ const plugin: Plugin = async (input: PluginInput) => {
             willRecord,
             sessionId: context.sessionID,
           }, null, 2);
+        },
+      },
+      trace_use_global: {
+        description: "Switch to global storage mode. Traces will be saved to ~/.opencode-trace (default).",
+        args: {},
+        execute: async (_, context) => {
+          if (!instance.getStateManager()) {
+            return "StateManager not initialized";
+          }
+          instance.useGlobalDir();
+          return `Switched to global mode. Traces will be saved to ~/.opencode-trace`;
+        },
+      },
+      trace_use_local: {
+        description: "Switch to local storage mode. Traces will be saved to .opencode-trace in the current directory.",
+        args: {},
+        execute: async (_, context) => {
+          if (!instance.getStateManager()) {
+            return "StateManager not initialized";
+          }
+          instance.useLocalDir();
+          return `Switched to local mode. Traces will be saved to ./.opencode-trace`;
+        },
+      },
+      trace_storage_status: {
+        description: "Check current storage mode (global or local) and directories.",
+        args: {},
+        execute: async (_, context) => {
+          const status = instance.getStorageStatus();
+          return JSON.stringify(status, null, 2);
         },
       },
     },

@@ -22,14 +22,16 @@ const parts = computed(() => {
   const delta = props.change.delta;
 
   if (delta.sys) {
-    const { added, removed } = delta.sys;
+    const added = delta.sys.added || [];
+    const removed = delta.sys.removed || [];
     if (added.length > 0 || removed.length > 0) {
       result.push(renderCategorySummary("SYS", "sys", added, removed));
     }
   }
 
   if (delta.tool) {
-    const { added, removed } = delta.tool;
+    const added = delta.tool.added || [];
+    const removed = delta.tool.removed || [];
     if (added.length > 0 || removed.length > 0) {
       result.push(renderCategorySummary("TOOL", "tool", added, removed));
     }

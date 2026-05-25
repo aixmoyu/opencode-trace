@@ -13,6 +13,11 @@ export interface StoreOptions {
   traceDir?: string;
 }
 
+export interface BothDirsOptions {
+  globalDir: string;
+  localDir?: string;
+}
+
 function resolveDir(options?: StoreOptions): string {
   return options?.traceDir ?? getDefaultTraceDir();
 }
@@ -26,6 +31,11 @@ export interface SessionMeta {
   parentID?: string;
   subSessions?: string[];
   folderPath?: string;
+  scope?: "global" | "local";
+}
+
+export interface SessionMetaWithScope extends SessionMeta {
+  scope: "global" | "local";
 }
 
 /**
@@ -35,6 +45,10 @@ export interface SessionMeta {
  * Children are a flat list (SessionMeta[]) - not recursive (SessionTreeNode[]).
  * This design supports only one level of nesting (parent → children, no grandchildren).
  */
+export interface SessionTreeNodeWithScope extends SessionMetaWithScope {
+  children: SessionMetaWithScope[];
+}
+
 export interface SessionTreeNode extends SessionMeta {
   children: SessionMeta[];
 }
@@ -554,4 +568,50 @@ export async function deleteSessions(
   }
 
   return { deleted, errors };
+}
+
+export function listSessionsFromBothDirs(options: BothDirsOptions): SessionMetaWithScope[] {
+  const { globalDir, localDir } = options;
+  
+  const globalSessions = listSessions({ traceDir: globalDir }).map(s => ({ ...s, scope: "global" as const }));
+  
+  if (!localDir) {
+    return globalSessions;
+  }
+  
+  const localSessions = listSessions({ traceDir: localDir }).map(s => ({ ...s, scope: "local" as const }));
+  
+  const sessionMap = new Map<string, SessionMetaWithScope>();
+  
+  for (const session of globalSessions) {
+    sessionMap.set(session.id, session);
+  }
+  
+  for (const session of localSessions) {
+    sessionMap.set(session.id, session);
+  }
+  
+  return Array.from(sessionMap.values()).sort(
+    (a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
+  );
+}
+
+export function listSessionsTreeFromBothDirs(options: BothDirsOptions): SessionTreeNodeWithScope[] {
+  const sessions = listSessionsFromBothDirs(options);
+  const tree: SessionTreeNodeWithScope[] = [];
+  
+  for (const session of sessions) {
+    if (!session.parentID) {
+      const children = sessions.filter(s => s.parentID === session.id);
+      const node: SessionTreeNodeWithScope = {
+        ...session,
+        children,
+      };
+      tree.push(node);
+    }
+  }
+  
+  return tree.sort((a, b) =>
+    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
+  );
 }

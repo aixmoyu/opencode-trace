@@ -7,7 +7,17 @@ export async function cmdEnable(args: string[]): Promise<void> {
 
 export async function cmdSetEnabled(args: string[], enable: boolean): Promise<void> {
   const { positional, flags } = parseFlags(args);
-  const traceDir = flags.session ? LOCAL_TRACE_DIR : GLOBAL_TRACE_DIR;
+
+  let traceDir: string;
+  let mode: string;
+
+  if (flags.local) {
+    traceDir = LOCAL_TRACE_DIR;
+    mode = "local";
+  } else {
+    traceDir = GLOBAL_TRACE_DIR;
+    mode = "global";
+  }
 
   await record.initStateManager(traceDir);
 
@@ -18,9 +28,9 @@ export async function cmdSetEnabled(args: string[], enable: boolean): Promise<vo
       process.exit(1);
     }
     record.setSessionEnabled(sessionId, enable, traceDir);
-    console.log(`Session ${sessionId} ${enable ? 'enabled' : 'disabled'}.`);
+    console.log(`Session ${sessionId} ${enable ? 'enabled' : 'disabled'} in ${mode} mode.`);
   } else {
     record.setGlobalTraceEnabled(enable, traceDir);
-    console.log(`Global trace ${enable ? 'enabled' : 'disabled'}.`);
+    console.log(`Global trace ${enable ? 'enabled' : 'disabled'} in ${mode} mode.`);
   }
 }

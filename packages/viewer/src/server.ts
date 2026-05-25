@@ -6,7 +6,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
-import { store, parse, query, transform, record } from "@opencode-trace/core";
+import { store, parse, query, transform, record, getTraceDir } from "@opencode-trace/core";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -40,6 +40,8 @@ function validateParams(reply: any, sessionId: string, recordId?: string): numbe
 export interface ViewerOptions {
   port?: number;
   traceDir?: string;
+  globalDir?: string;
+  localDir?: string;
   open?: boolean;
   corsOrigin?: string | string[] | RegExp | boolean;
 }
@@ -51,8 +53,38 @@ export interface ViewerInstance {
 
 export async function createViewer(options?: ViewerOptions): Promise<ViewerInstance> {
   const port = options?.port ?? 3210;
-  const traceDir = options?.traceDir;
-  const storeOpts = traceDir ? { traceDir } : undefined;
+  const globalDir = options?.globalDir ?? options?.traceDir ?? getTraceDir();
+  const localDir = options?.localDir ?? options?.traceDir;
+  const bothDirsOpts = { globalDir, localDir };
+
+  function findSessionTraceDir(sessionId: string): string | null {
+    if (localDir) {
+      const localMeta = store.readSessionMetadata(sessionId, localDir);
+      if (localMeta) return localDir;
+      const localRecords = store.getSessionRecords(sessionId, { traceDir: localDir });
+      if (localRecords.length > 0) return localDir;
+    }
+    const globalMeta = store.readSessionMetadata(sessionId, globalDir);
+    if (globalMeta) return globalDir;
+    const globalRecords = store.getSessionRecords(sessionId, { traceDir: globalDir });
+    if (globalRecords.length > 0) return globalDir;
+    return null;
+  }
+
+  function validateSessionAndFindDir(reply: any, sessionId: string): string | null {
+    if (!validateSessionId(sessionId)) {
+      reply.code(400);
+      reply.send({ error: "Invalid session ID format" });
+      return null;
+    }
+    const sessionTraceDir = findSessionTraceDir(sessionId);
+    if (!sessionTraceDir) {
+      reply.code(404);
+      reply.send({ error: "Session not found" });
+      return null;
+    }
+    return sessionTraceDir;
+  }
 
   const app = Fastify({ logger: false });
 
@@ -84,12 +116,12 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
   });
 
   app.get("/api/sessions", async (_req, reply) => {
-    const sessions = store.listSessions(storeOpts);
+    const sessions = store.listSessionsFromBothDirs(bothDirsOpts);
     return sessions;
   });
 
   app.get("/api/sessions/tree", async (_req, reply) => {
-    const tree = store.listSessionsTree(storeOpts);
+    const tree = store.listSessionsTreeFromBothDirs(bothDirsOpts);
     return tree;
   });
 
@@ -99,7 +131,12 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       reply.code(400);
       return { error: "Invalid session ID format" };
     }
-    const records = store.getSessionRecords(sessionId, storeOpts);
+    const sessionTraceDir = findSessionTraceDir(sessionId);
+    if (!sessionTraceDir) {
+      reply.code(404);
+      return { error: "Session not found" };
+    }
+    const records = store.getSessionRecords(sessionId, { traceDir: sessionTraceDir });
     const parsedRecords = records
       .map((rec) => {
         const parsed = parse.detectAndParse(rec);
@@ -140,7 +177,12 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       reply.code(400);
       return { error: "Invalid session ID format" };
     }
-    const records = store.getSessionRecords(sessionId, storeOpts);
+    const sessionTraceDir = findSessionTraceDir(sessionId);
+    if (!sessionTraceDir) {
+      reply.code(404);
+      return { error: "Session not found" };
+    }
+    const records = store.getSessionRecords(sessionId, { traceDir: sessionTraceDir });
     const parsedRecords = records
       .map((rec) => ({
         id: rec.id,
@@ -149,10 +191,10 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       }))
       .filter((c) => c.parsed.provider !== "unknown" || c.parsed.msgs.length > 0);
 
-    const sessions = store.listSessions(storeOpts);
+    const sessions = store.listSessionsFromBothDirs(bothDirsOpts);
     const sessionMeta = sessions.find((s) => s.id === sessionId);
 
-    const tree = store.listSessionsTree(storeOpts);
+    const tree = store.listSessionsTreeFromBothDirs(bothDirsOpts);
     const node = tree.find((n) => n.id === sessionId);
 
     const metadata = query.buildSessionMetadata(
@@ -177,7 +219,9 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       const { sessionId, recordId } = req.params;
       const rid = validateParams(reply, sessionId, recordId);
       if (rid === null) return;
-      const rec = store.getRecord(sessionId, rid, storeOpts);
+      const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
+      if (sessionTraceDir === null) return;
+      const rec = store.getRecord(sessionId, rid, { traceDir: sessionTraceDir });
       if (!rec) {
         reply.code(404);
         return { error: "Record not found" };
@@ -193,7 +237,9 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       const { sessionId, recordId } = req.params;
       const rid = validateParams(reply, sessionId, recordId);
       if (rid === null) return;
-      const rec = store.getRecord(sessionId, rid, storeOpts);
+      const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
+      if (sessionTraceDir === null) return;
+      const rec = store.getRecord(sessionId, rid, { traceDir: sessionTraceDir });
       if (!rec) {
         reply.code(404);
         return { error: "Record not found" };
@@ -209,7 +255,9 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       const { sessionId, recordId } = req.params;
       const rid = validateParams(reply, sessionId, recordId);
       if (rid === null) return;
-      const rec = store.getRecord(sessionId, rid, storeOpts);
+      const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
+      if (sessionTraceDir === null) return;
+      const rec = store.getRecord(sessionId, rid, { traceDir: sessionTraceDir });
       if (!rec) {
         reply.code(404);
         return { error: "Record not found" };
@@ -225,12 +273,14 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       const { sessionId, recordId } = req.params;
       const rid = validateParams(reply, sessionId, recordId);
       if (rid === null) return;
-      const sseData = store.getSSEStream(sessionId, rid, storeOpts);
+      const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
+      if (sessionTraceDir === null) return;
+      const sseData = store.getSSEStream(sessionId, rid, { traceDir: sessionTraceDir });
       if (!sseData) {
         reply.code(404);
         return { error: "No SSE data found" };
       }
-      const rec = store.getRecord(sessionId, rid, storeOpts);
+      const rec = store.getRecord(sessionId, rid, { traceDir: sessionTraceDir });
       const provider = rec?.request
         ? parse.detectProvider(rec.request.url, rec.request.body)
         : null;
@@ -252,7 +302,9 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       const { sessionId, recordId } = req.params;
       const rid = validateParams(reply, sessionId, recordId);
       if (rid === null) return;
-      const rec = store.getRecord(sessionId, rid, storeOpts);
+      const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
+      if (sessionTraceDir === null) return;
+      const rec = store.getRecord(sessionId, rid, { traceDir: sessionTraceDir });
       if (!rec) {
         reply.code(404);
         return { error: "Record not found" };
@@ -267,9 +319,10 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       reply.code(400);
       return { error: "Invalid session ID format" };
     }
-    const sessions = store.listSessions(storeOpts);
+    const sessionTraceDir = findSessionTraceDir(sessionId);
+    const sessions = store.listSessionsFromBothDirs(bothDirsOpts);
     const sessionMeta = sessions.find((s) => s.id === sessionId);
-    const records = store.getSessionRecords(sessionId, storeOpts);
+    const records = sessionTraceDir ? store.getSessionRecords(sessionId, { traceDir: sessionTraceDir }) : [];
     const enriched = records.map((rec) => ({
       ...rec,
       provider: rec?.request
@@ -290,22 +343,22 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
   });
 
   app.get("/api/trace/status", async (_req, reply) => {
-    const enabled = record.getGlobalTraceEnabled(traceDir);
+    const enabled = record.getGlobalTraceEnabled(globalDir);
     return { globalEnabled: enabled };
   });
 
   app.get("/api/trace/enable", async (_req, reply) => {
-    record.setGlobalTraceEnabled(true, traceDir);
+    record.setGlobalTraceEnabled(true, globalDir);
     return { success: true, globalEnabled: true };
   });
 
   app.get("/api/trace/disable", async (_req, reply) => {
-    record.setGlobalTraceEnabled(false, traceDir);
+    record.setGlobalTraceEnabled(false, globalDir);
     return { success: true, globalEnabled: false };
   });
 
   app.get("/api/trace-dir", async (_req, reply) => {
-    return { traceDir: store.getTraceDir(storeOpts) };
+    return { traceDir: globalDir, localDir };
   });
 
   app.post<{ Params: { sessionId: string } }>("/api/sessions/:sessionId/export", async (req, reply) => {
@@ -315,7 +368,12 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
         reply.code(400);
         return { error: "Invalid session ID format" };
       }
-      const stream = await store.exportSessionZip(sessionId, storeOpts);
+      const sessionTraceDir = findSessionTraceDir(sessionId);
+      if (!sessionTraceDir) {
+        reply.code(404);
+        return { error: "Session not found" };
+      }
+      const stream = await store.exportSessionZip(sessionId, { traceDir: sessionTraceDir });
 
       reply
         .type("application/zip")
@@ -350,7 +408,7 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       }
 
       const result = await store.importSessionZip(fileBuffer, {
-        ...storeOpts,
+        traceDir: globalDir,
         conflictStrategy: conflictStrategy as "prompt" | "rename" | "skip" | "overwrite",
       });
 
@@ -373,14 +431,15 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
         reply.code(400);
         return { error: "Invalid session ID format" };
       }
-      await store.deleteSession(sessionId, storeOpts);
-      return { success: true, sessionId };
-    } catch (e) {
-      const err = e as Error;
-      if (err.message === "Session not found") {
+      const sessionTraceDir = findSessionTraceDir(sessionId);
+      if (!sessionTraceDir) {
         reply.code(404);
         return { error: "Session not found" };
       }
+      await store.deleteSession(sessionId, { traceDir: sessionTraceDir });
+      return { success: true, sessionId };
+    } catch (e) {
+      const err = e as Error;
       reply.code(500);
       return { error: "Delete failed: " + err.message };
     }
@@ -393,8 +452,22 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
         reply.code(400);
         return { error: "sessionIds must be a non-empty array" };
       }
-      const result = await store.deleteSessions(body.sessionIds, storeOpts);
-      return { success: true, ...result };
+      const deleted: string[] = [];
+      const errors: { sessionId: string; error: string }[] = [];
+      for (const sessionId of body.sessionIds) {
+        try {
+          const sessionTraceDir = findSessionTraceDir(sessionId);
+          if (sessionTraceDir) {
+            await store.deleteSession(sessionId, { traceDir: sessionTraceDir });
+            deleted.push(sessionId);
+          } else {
+            errors.push({ sessionId, error: "Session not found" });
+          }
+        } catch (e) {
+          errors.push({ sessionId, error: (e as Error).message });
+        }
+      }
+      return { success: true, deleted, errors };
     } catch (e) {
       reply.code(500);
       return { error: "Batch delete failed: " + (e as Error).message };

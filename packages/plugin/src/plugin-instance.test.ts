@@ -30,7 +30,7 @@ describe("TracePlugin", () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "plugin-test-"));
-    plugin = new TracePlugin(tempDir);
+    plugin = new TracePlugin(tempDir, tempDir);
   });
 
   afterEach(() => {

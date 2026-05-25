@@ -40,7 +40,7 @@ describe("Integration: TracePlugin full flow", () => {
 
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), "integration-test-"));
-    plugin = new TracePlugin(tempDir);
+    plugin = new TracePlugin(tempDir, tempDir);
   });
 
   afterEach(() => {

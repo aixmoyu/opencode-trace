@@ -45,9 +45,9 @@ export function diffConversations(
       delta.sys = { id: prev.sys.id, added, removed };
     }
   } else if (!prev.sys && curr.sys) {
-    delta.sys = { id: curr.sys.id, added: curr.sys.blocks };
+    delta.sys = { id: curr.sys.id, added: curr.sys.blocks, removed: [] };
   } else if (prev.sys && !curr.sys) {
-    delta.sys = { id: prev.sys.id, removed: prev.sys.blocks };
+    delta.sys = { id: prev.sys.id, added: [], removed: prev.sys.blocks };
   }
 
   if (prev.tool && curr.tool) {
@@ -59,9 +59,9 @@ export function diffConversations(
       delta.tool = { id: prev.tool.id, added, removed };
     }
   } else if (!prev.tool && curr.tool) {
-    delta.tool = { id: curr.tool.id, added: curr.tool.blocks };
+    delta.tool = { id: curr.tool.id, added: curr.tool.blocks, removed: [] };
   } else if (prev.tool && !curr.tool) {
-    delta.tool = { id: prev.tool.id, removed: prev.tool.blocks };
+    delta.tool = { id: prev.tool.id, added: [], removed: prev.tool.blocks };
   }
 
   const prevMsgKeys = new Map<string, Entry>();
@@ -79,7 +79,7 @@ export function diffConversations(
     const prevMsg = prevMsgKeys.get(key);
 
     if (!prevMsg) {
-      delta.msgs.push({ id: currMsg.id, added: currMsg.blocks });
+      delta.msgs.push({ id: currMsg.id, added: currMsg.blocks, removed: [] });
     } else {
       const prevBlockKeys = new Set(prevMsg.blocks.map(blockKey));
       const currBlockKeys = new Set(currMsg.blocks.map(blockKey));
@@ -94,7 +94,7 @@ export function diffConversations(
   for (const prevMsg of prev.msgs) {
     const key = msgKey(prevMsg);
     if (!currMsgKeys.has(key)) {
-      delta.msgs.push({ id: prevMsg.id, removed: prevMsg.blocks });
+      delta.msgs.push({ id: prevMsg.id, added: [], removed: prevMsg.blocks });
     }
   }
 
@@ -112,13 +112,13 @@ function buildInitialChange(conv: Conversation, requestId: number, requestMsgs?:
   const delta: Delta = { msgs: [] };
   
   if (conv.sys) {
-    delta.sys = { id: conv.sys.id, added: conv.sys.blocks };
+    delta.sys = { id: conv.sys.id, added: conv.sys.blocks, removed: [] };
   }
   if (conv.tool) {
-    delta.tool = { id: conv.tool.id, added: conv.tool.blocks };
+    delta.tool = { id: conv.tool.id, added: conv.tool.blocks, removed: [] };
   }
   for (const msg of conv.msgs) {
-    delta.msgs.push({ id: msg.id, added: msg.blocks });
+    delta.msgs.push({ id: msg.id, added: msg.blocks, removed: [] });
   }
   
   const isUserCall = checkIsUserCall(requestMsgs ?? conv.msgs);

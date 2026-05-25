@@ -418,3 +418,151 @@ describe("Plugin - tool.execute.after hook 处理 Task 工具", () => {
     expect(existsSync(dbPath)).toBe(true);
   });
 });
+
+describe("Plugin - global/local mode", () => {
+  test("trace_use_global tool switches to global mode", async () => {
+    const hooks = await entrypoint.server({
+      client: {} as any,
+      project: {} as any,
+      directory: testDir,
+      worktree: testDir,
+      experimental_workspace: { register: vi.fn() },
+      serverUrl: new URL("http://localhost"),
+      $: {} as any,
+    });
+
+    const sessionId = "test-session-global";
+
+    await hooks.event!({
+      event: {
+        type: "session.created",
+        properties: {
+          info: {
+            id: sessionId,
+            projectID: "test-project",
+            directory: testDir,
+            title: "Test Session",
+            version: "1.0",
+            time: { created: Date.now(), updated: Date.now() },
+          },
+        },
+      } as any,
+    });
+
+    const result = await hooks.tool!.trace_use_global!.execute({}, { sessionID: sessionId } as any);
+    expect(result).toContain("global mode");
+
+    const globalDir = join(testDir, ".opencode-trace");
+    const sessionDir = join(globalDir, sessionId);
+
+    await hooks.event!({
+      event: {
+        type: "session.updated",
+        properties: {
+          info: {
+            id: sessionId,
+            projectID: "test-project",
+            directory: testDir,
+            title: "Test Session Updated",
+            version: "1.0",
+            time: { created: Date.now(), updated: Date.now() },
+          },
+        },
+      } as any,
+    });
+
+    await new Promise(r => setTimeout(r, 100));
+    expect(existsSync(sessionDir)).toBe(true);
+  });
+
+  test("trace_use_local tool switches to local mode", async () => {
+    const hooks = await entrypoint.server({
+      client: {} as any,
+      project: {} as any,
+      directory: testDir,
+      worktree: testDir,
+      experimental_workspace: { register: vi.fn() },
+      serverUrl: new URL("http://localhost"),
+      $: {} as any,
+    });
+
+    const sessionId = "test-session-local";
+
+    await hooks.event!({
+      event: {
+        type: "session.created",
+        properties: {
+          info: {
+            id: sessionId,
+            projectID: "test-project",
+            directory: testDir,
+            title: "Test Session",
+            version: "1.0",
+            time: { created: Date.now(), updated: Date.now() },
+          },
+        },
+      } as any,
+    });
+
+    const result = await hooks.tool!.trace_use_local!.execute({}, { sessionID: sessionId } as any);
+    expect(result).toContain("local mode");
+
+    const localDir = join(testDir, ".opencode-trace");
+    const sessionDir = join(localDir, sessionId);
+
+    await hooks.event!({
+      event: {
+        type: "session.updated",
+        properties: {
+          info: {
+            id: sessionId,
+            projectID: "test-project",
+            directory: testDir,
+            title: "Test Session Updated",
+            version: "1.0",
+            time: { created: Date.now(), updated: Date.now() },
+          },
+        },
+      } as any,
+    });
+
+    await new Promise(r => setTimeout(r, 100));
+    expect(existsSync(sessionDir)).toBe(true);
+  });
+
+  test("trace_storage_status shows current mode", async () => {
+    const hooks = await entrypoint.server({
+      client: {} as any,
+      project: {} as any,
+      directory: testDir,
+      worktree: testDir,
+      experimental_workspace: { register: vi.fn() },
+      serverUrl: new URL("http://localhost"),
+      $: {} as any,
+    });
+
+    const sessionId = "test-session-status";
+
+    await hooks.event!({
+      event: {
+        type: "session.created",
+        properties: {
+          info: {
+            id: sessionId,
+            projectID: "test-project",
+            directory: testDir,
+            title: "Test Session",
+            version: "1.0",
+            time: { created: Date.now(), updated: Date.now() },
+          },
+        },
+      } as any,
+    });
+
+    const result = await hooks.tool!.trace_storage_status!.execute({}, { sessionID: sessionId } as any);
+    const parsed = JSON.parse(result as string);
+    expect(parsed.mode).toBeDefined();
+    expect(parsed.globalDir).toBeDefined();
+    expect(parsed.localDir).toBeDefined();
+  });
+});

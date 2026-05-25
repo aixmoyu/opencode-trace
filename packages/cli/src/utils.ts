@@ -60,6 +60,8 @@ export function parseFlags(argv: string[]): ParsedFlags {
     const arg = argv[i];
     if (arg === "-s" || arg === "--session") {
       flags.session = true;
+    } else if (arg === "--local") {
+      flags.local = true;
     } else if (arg === "-r" && i + 1 < argv.length) {
       flags.req = argv[++i];
     } else if (arg === "-o" && i + 1 < argv.length) {

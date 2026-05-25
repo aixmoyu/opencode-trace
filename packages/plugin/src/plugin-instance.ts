@@ -15,13 +15,36 @@ export class TracePlugin {
   private stateQueue: AsyncStateQueue;
   private stateManager: StateManager | null = null;
   private interceptorInstalled: boolean = false;
-  private traceDir: string;
+  private globalDir: string;
+  private localDir: string;
+  private currentDir: string;
 
-  constructor(traceDir: string) {
-    this.traceDir = traceDir;
+  constructor(globalDir: string, localDir: string) {
+    this.globalDir = globalDir;
+    this.localDir = localDir;
+    this.currentDir = globalDir; // Default to global
     this.origFetch = globalThis.fetch; // Will be updated in installInterceptor
-    this.writeQueue = new AsyncWriteQueue(traceDir);
+    this.writeQueue = new AsyncWriteQueue(this.currentDir);
     this.stateQueue = new AsyncStateQueue();
+  }
+
+  useGlobalDir(): void {
+    this.currentDir = this.globalDir;
+    this.writeQueue = new AsyncWriteQueue(this.currentDir);
+  }
+
+  useLocalDir(): void {
+    this.currentDir = this.localDir;
+    this.writeQueue = new AsyncWriteQueue(this.currentDir);
+  }
+
+  getStorageStatus(): { mode: string; globalDir: string; localDir: string; currentDir: string } {
+    return {
+      mode: this.currentDir === this.globalDir ? "global" : "local",
+      globalDir: this.globalDir,
+      localDir: this.localDir,
+      currentDir: this.currentDir,
+    };
   }
 
   async tracedFetch(input: Parameters<typeof globalThis.fetch>[0], init?: Parameters<typeof globalThis.fetch>[1]): Promise<Response> {
@@ -236,7 +259,7 @@ export class TracePlugin {
   }
 
   async initStateManager(): Promise<void> {
-    this.stateManager = new StateManager(this.traceDir);
+    this.stateManager = new StateManager(this.globalDir);
     await this.stateManager.init();
     this.stateManager.sync();
     this.stateQueue.setStateManager(this.stateManager);

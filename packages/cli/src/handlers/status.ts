@@ -3,15 +3,26 @@ import { parseFlags, GLOBAL_TRACE_DIR, LOCAL_TRACE_DIR } from "../utils.js";
 
 export async function cmdStatus(args: string[]): Promise<void> {
   const { positional, flags } = parseFlags(args);
-  const traceDir = flags.session ? LOCAL_TRACE_DIR : GLOBAL_TRACE_DIR;
+
+  let traceDir: string;
+  let mode: string;
+
+  if (flags.local) {
+    traceDir = LOCAL_TRACE_DIR;
+    mode = "local";
+  } else {
+    traceDir = GLOBAL_TRACE_DIR;
+    mode = "global";
+  }
 
   await record.initStateManager(traceDir);
 
   const status: {
+    mode?: string;
     globalEnabled?: boolean;
     sessionEnabled?: boolean;
     sessionId?: string;
-  } = {};
+  } = { mode };
 
   if (flags.session) {
     const sessionId = positional[0];
