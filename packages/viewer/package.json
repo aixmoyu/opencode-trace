@@ -1,6 +1,6 @@
 {
   "name": "@opencode-trace/viewer",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "type": "module",
   "description": "Web viewer for opencode-trace",
   "bin": {
@@ -18,7 +18,7 @@
     "clean": "node ../../scripts/clean.mjs"
   },
   "dependencies": {
-    "@opencode-trace/core": "0.0.3",
+    "@opencode-trace/core": "0.0.4",
     "@fastify/cors": "^11.2.0",
     "@fastify/multipart": "^10.0.0",
     "@fastify/rate-limit": "^10.3.0",

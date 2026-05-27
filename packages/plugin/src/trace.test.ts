@@ -4,6 +4,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import entrypoint, { _resetForTesting } from "./trace.js";
 
+vi.mock("node:os", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:os")>();
+  return {
+    ...original,
+    homedir: () => {
+      const testDir = process.env._TEST_DIR_;
+      if (testDir) return testDir;
+      return original.homedir();
+    },
+  };
+});
+
 async function waitForFile(filePath: string, timeoutMs: number = 5000): Promise<void> {
   const startTime = Date.now();
   while (true) {
@@ -28,12 +40,12 @@ let testDir: string;
 
 beforeEach(() => {
   testDir = mkdtempSync(join(tmpdir(), "plugin-test-"));
-  vi.stubEnv("HOME", testDir);
+  process.env._TEST_DIR_ = testDir;
 });
 
 afterEach(() => {
   rmSync(testDir, { recursive: true, force: true });
-  vi.unstubAllEnvs();
+  delete process.env._TEST_DIR_;
 });
 
 describe("Plugin - Hooks 返回值", () => {

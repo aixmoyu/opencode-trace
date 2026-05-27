@@ -34,10 +34,7 @@ describe("getTraceDir", () => {
       homedir: () => "/home/testuser",
     }));
     const { getTraceDir } = await import("./platform.js");
-    const expectedPath = realPlatform === "win32" 
-      ? "\\home\\testuser\\.opencode-trace" 
-      : "/home/testuser/.opencode-trace";
-    expect(getTraceDir()).toBe(expectedPath);
+    expect(getTraceDir()).toBe("/home/testuser/.opencode-trace");
   });
 });
 
