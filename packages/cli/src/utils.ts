@@ -16,7 +16,9 @@ export interface RequestRange {
 
 export function parseRange(rangeStr: string, lastReqId: number): RequestRange {
   if (!/^\d+(:\d*)?$/.test(rangeStr)) {
-    console.error(`Error: Invalid range format: ${rangeStr}. Expected format: "N" or "N:M"`);
+    console.error(
+      `Error: Invalid range format: ${rangeStr}. Expected format: "N" or "N:M"`,
+    );
     process.exit(1);
   }
 
@@ -69,7 +71,9 @@ export function parseFlags(argv: string[]): ParsedFlags {
     } else if (arg === "-t" && i + 1 < argv.length) {
       const t = argv[++i];
       if (!["metadata", "conversation", "changes", "raw"].includes(t)) {
-        console.error(`Error: Invalid export type: ${t}. Valid: metadata, conversation, changes, raw`);
+        console.error(
+          `Error: Invalid export type: ${t}. Valid: metadata, conversation, changes, raw`,
+        );
         process.exit(1);
       }
       flags.type = t;
@@ -104,10 +108,14 @@ export function findSessionTraceDir(sessionId: string): string | null {
   const globalMeta = store.readSessionMetadata(sessionId, GLOBAL_TRACE_DIR);
   if (globalMeta) return GLOBAL_TRACE_DIR;
 
-  const localRecords = store.getSessionRecords(sessionId, { traceDir: LOCAL_TRACE_DIR });
+  const localRecords = store.getSessionRecords(sessionId, {
+    traceDir: LOCAL_TRACE_DIR,
+  });
   if (localRecords.length > 0) return LOCAL_TRACE_DIR;
 
-  const globalRecords = store.getSessionRecords(sessionId, { traceDir: GLOBAL_TRACE_DIR });
+  const globalRecords = store.getSessionRecords(sessionId, {
+    traceDir: GLOBAL_TRACE_DIR,
+  });
   if (globalRecords.length > 0) return GLOBAL_TRACE_DIR;
 
   return null;

@@ -2,8 +2,20 @@
   <div v-if="!hasContent" class="empty-state"><p>No conversation data</p></div>
   <template v-else>
     <template v-if="sysBlocks.length > 0">
-      <div class="section-title" :class="{ expanded: expandedSections.sys }" @click="toggleSection('sys')">
-        <svg class="section-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <div
+        class="section-title"
+        :class="{ expanded: expandedSections.sys }"
+        @click="toggleSection('sys')"
+      >
+        <svg
+          class="section-arrow"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path d="m6 9 6 6 6-6" />
         </svg>
         SYSTEM PROMPT
@@ -12,15 +24,31 @@
         <div class="msg">
           <div class="msg-header"><span class="cat-tag sys">SYS</span></div>
           <div class="msg-body">
-            <BlockRenderer v-for="(block, i) in sysBlocks" :key="'sys-' + i" :block="block" />
+            <BlockRenderer
+              v-for="(block, i) in sysBlocks"
+              :key="'sys-' + i"
+              :block="block"
+            />
           </div>
         </div>
       </div>
     </template>
 
     <template v-if="tdBlocks.length > 0">
-      <div class="section-title" :class="{ expanded: expandedSections.tool }" @click="toggleSection('tool')">
-        <svg class="section-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <div
+        class="section-title"
+        :class="{ expanded: expandedSections.tool }"
+        @click="toggleSection('tool')"
+      >
+        <svg
+          class="section-arrow"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path d="m6 9 6 6 6-6" />
         </svg>
         TOOL DEFINITIONS
@@ -32,15 +60,31 @@
             <span class="badge">{{ tdBlocks.length }} tools</span>
           </div>
           <div class="msg-body">
-            <BlockRenderer v-for="(block, i) in tdBlocks" :key="'td-' + i" :block="block" />
+            <BlockRenderer
+              v-for="(block, i) in tdBlocks"
+              :key="'td-' + i"
+              :block="block"
+            />
           </div>
         </div>
       </div>
     </template>
 
     <template v-if="msgs.length > 0">
-      <div class="section-title" :class="{ expanded: expandedSections.msgs }" @click="toggleSection('msgs')">
-        <svg class="section-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <div
+        class="section-title"
+        :class="{ expanded: expandedSections.msgs }"
+        @click="toggleSection('msgs')"
+      >
+        <svg
+          class="section-arrow"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path d="m6 9 6 6 6-6" />
         </svg>
         MESSAGES
@@ -53,7 +97,11 @@
               <span class="role-tag">{{ msg.role }}</span>
             </div>
             <div class="msg-body">
-              <BlockRenderer v-for="(block, j) in (msg.blocks || [])" :key="'msg-block-' + j" :block="block" />
+              <BlockRenderer
+                v-for="(block, j) in msg.blocks || []"
+                :key="'msg-block-' + j"
+                :block="block"
+              />
             </div>
           </div>
         </div>
@@ -100,7 +148,11 @@ const tdBlocks = computed(() => {
 const msgs = computed(() => props.parsed?.msgs || []);
 
 const hasContent = computed(() => {
-  return sysBlocks.value.length > 0 || tdBlocks.value.length > 0 || msgs.value.length > 0;
+  return (
+    sysBlocks.value.length > 0 ||
+    tdBlocks.value.length > 0 ||
+    msgs.value.length > 0
+  );
 });
 </script>
 
@@ -136,9 +188,18 @@ const hasContent = computed(() => {
   border-radius: 2px;
 }
 
-.cat-tag.sys { background: rgba(139, 92, 246, 0.15); color: var(--sys-color); }
-.cat-tag.tool { background: rgba(255, 159, 10, 0.15); color: var(--warning); }
-.cat-tag.msg { background: rgba(61, 139, 255, 0.15); color: var(--accent); }
+.cat-tag.sys {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--sys-color);
+}
+.cat-tag.tool {
+  background: rgba(255, 159, 10, 0.15);
+  color: var(--warning);
+}
+.cat-tag.msg {
+  background: rgba(61, 139, 255, 0.15);
+  color: var(--accent);
+}
 
 .role-tag {
   font-size: 12px;

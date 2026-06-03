@@ -42,9 +42,13 @@ export const BLOCK_DEFS: Record<string, BlockDef> = {
   td: {
     tag: "TD",
     toggle: true,
-    renderMeta: (b) => `<span class="tool-meta-name">${esc(b.name || "")}</span>`,
+    renderMeta: (b) =>
+      `<span class="tool-meta-name">${esc(b.name || "")}</span>`,
     getRaw: (b) => {
-      const obj: Record<string, unknown> = { name: b.name, description: b.description };
+      const obj: Record<string, unknown> = {
+        name: b.name,
+        description: b.description,
+      };
       if (b.parameters) obj.parameters = b.parameters;
       return JSON.stringify(obj, null, 2);
     },
@@ -54,7 +58,8 @@ export const BLOCK_DEFS: Record<string, BlockDef> = {
   tc: {
     tag: "TC",
     toggle: true,
-    renderMeta: (b) => `<span class="tool-meta-name">${esc(b.name || "")}</span>`,
+    renderMeta: (b) =>
+      `<span class="tool-meta-name">${esc(b.name || "")}</span>`,
     getRaw: (b) => b.arguments || "",
     renderRaw: null,
     renderRendered: null,
@@ -62,7 +67,8 @@ export const BLOCK_DEFS: Record<string, BlockDef> = {
   tr: {
     tag: "TR",
     toggle: true,
-    renderMeta: (b) => `<span class="tool-meta-id">Tool result: ${esc(b.toolCallId || "")}</span>`,
+    renderMeta: (b) =>
+      `<span class="tool-meta-id">Tool result: ${esc(b.toolCallId || "")}</span>`,
     getRaw: (b) => b.content || "",
     renderRaw: null,
     renderRendered: null,
@@ -127,12 +133,15 @@ export function formatJsonLines(obj: unknown): string {
         cls = "json-null";
       }
       return `<span class="${cls}">${match}</span>`;
-    }
+    },
   );
 
   const lines = highlighted.split("\n");
   return lines
-    .map((line, i) => `<div class="json-line"><span class="json-num">${i + 1}</span>${line}</div>`)
+    .map(
+      (line, i) =>
+        `<div class="json-line"><span class="json-num">${i + 1}</span>${line}</div>`,
+    )
     .join("");
 }
 
@@ -143,7 +152,10 @@ export function formatXmlLines(xml: string): string {
     .replace(/>/g, "&gt;");
   const lines = escaped.split("\n");
   return lines
-    .map((line, i) => `<div class="xml-line"><span class="xml-num">${i + 1}</span>${line}</div>`)
+    .map(
+      (line, i) =>
+        `<div class="xml-line"><span class="xml-num">${i + 1}</span>${line}</div>`,
+    )
     .join("");
 }
 

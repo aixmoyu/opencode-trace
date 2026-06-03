@@ -12,8 +12,16 @@
         <div :id="titleId" class="confirm-title">{{ title }}</div>
         <div :id="messageId" class="confirm-message">{{ message }}</div>
         <div class="confirm-actions">
-          <button class="confirm-btn cancel" ref="cancelBtnRef" @click="$emit('cancel')">Cancel</button>
-          <button class="confirm-btn danger" @click="$emit('confirm')">Delete</button>
+          <button
+            class="confirm-btn cancel"
+            ref="cancelBtnRef"
+            @click="$emit('cancel')"
+          >
+            Cancel
+          </button>
+          <button class="confirm-btn danger" @click="$emit('confirm')">
+            Delete
+          </button>
         </div>
       </div>
     </div>

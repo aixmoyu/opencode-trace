@@ -1,6 +1,9 @@
 <template>
   <div class="container">
-    <div v-if="loading" class="loading"><div class="spinner"></div>Loading record...</div>
+    <div v-if="loading" class="loading">
+      <div class="spinner"></div>
+      Loading record...
+    </div>
 
     <template v-else-if="error">
       <div class="error-banner">{{ error }}</div>
@@ -9,7 +12,9 @@
     <template v-else>
       <div class="page-title">
         {{ displayTitle }}
-        <span v-if="displaySubtitle" class="subtitle">{{ displaySubtitle }}</span>
+        <span v-if="displaySubtitle" class="subtitle">{{
+          displaySubtitle
+        }}</span>
         <span class="count">#{{ recordId }}</span>
       </div>
 
@@ -25,10 +30,30 @@
       </MetadataCard>
 
       <div class="view-toggle">
-        <button :class="{ active: viewMode === 'changes' }" @click="viewMode = 'changes'">Changes</button>
-        <button :class="{ active: viewMode === 'conversation' }" @click="viewMode = 'conversation'">Conversation</button>
-        <button :class="{ active: viewMode === 'request' }" @click="viewMode = 'request'">Request</button>
-        <button :class="{ active: viewMode === 'response' }" @click="viewMode = 'response'">Response</button>
+        <button
+          :class="{ active: viewMode === 'changes' }"
+          @click="viewMode = 'changes'"
+        >
+          Changes
+        </button>
+        <button
+          :class="{ active: viewMode === 'conversation' }"
+          @click="viewMode = 'conversation'"
+        >
+          Conversation
+        </button>
+        <button
+          :class="{ active: viewMode === 'request' }"
+          @click="viewMode = 'request'"
+        >
+          Request
+        </button>
+        <button
+          :class="{ active: viewMode === 'response' }"
+          @click="viewMode = 'response'"
+        >
+          Response
+        </button>
       </div>
 
       <div class="record-view-content">
@@ -55,7 +80,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { api } from "../composables/useApi";
-import { esc, formatTime, formatNumber, formatLatency, formatDuration } from "../utils/format";
+import {
+  esc,
+  formatTime,
+  formatNumber,
+  formatLatency,
+  formatDuration,
+} from "../utils/format";
 import ChangeSummary from "../components/ChangeSummary.vue";
 import MetadataCard from "../components/MetadataCard.vue";
 import ChangesView from "../components/ChangesView.vue";
@@ -128,27 +159,41 @@ const record = ref<RecordData>({} as RecordData);
 const parsed = ref<ParsedData>({});
 const changeData = ref<ChangeData | null>(null);
 const session = ref<{ title?: string }>({});
-const viewMode = ref<"changes" | "conversation" | "request" | "response">("changes");
+const viewMode = ref<"changes" | "conversation" | "request" | "response">(
+  "changes",
+);
 
 const displayTitle = computed(() => session.value.title || props.sessionId);
-const displaySubtitle = computed(() => session.value.title ? props.sessionId : "");
+const displaySubtitle = computed(() =>
+  session.value.title ? props.sessionId : "",
+);
 
-const isStream = computed(() => record.value.requestSentAt != null && record.value.firstTokenAt != null);
+const isStream = computed(
+  () => record.value.requestSentAt != null && record.value.firstTokenAt != null,
+);
 
 const isUserCall = computed(() => changeData.value?.isUserCall ?? false);
 
-const interDuration = computed(() => changeData.value?.interRequestDuration ?? null);
+const interDuration = computed(
+  () => changeData.value?.interRequestDuration ?? null,
+);
 
 const execDuration = computed(() => {
   if (!record.value.requestAt || !record.value.responseAt) return "-";
-  const diff = new Date(record.value.responseAt).getTime() - new Date(record.value.requestAt).getTime();
+  const diff =
+    new Date(record.value.responseAt).getTime() -
+    new Date(record.value.requestAt).getTime();
   return formatDuration(diff);
 });
 
 const totalTokens = computed(() => {
   const usage = parsed.value.usage;
   if (!usage) return 0;
-  return (usage.inputMissTokens || 0) + (usage.inputHitTokens || 0) + (usage.outputTokens || 0);
+  return (
+    (usage.inputMissTokens || 0) +
+    (usage.inputHitTokens || 0) +
+    (usage.outputTokens || 0)
+  );
 });
 
 const hitRate = computed(() => {
@@ -156,12 +201,17 @@ const hitRate = computed(() => {
   if (!usage) return "0%";
   const totalInput = (usage.inputMissTokens || 0) + (usage.inputHitTokens || 0);
   if (totalInput === 0) return "0%";
-  return `${((usage.inputHitTokens || 0) / totalInput * 100).toFixed(1)}%`;
+  return `${(((usage.inputHitTokens || 0) / totalInput) * 100).toFixed(1)}%`;
 });
 
 const latency = computed(() => {
   const r = record.value;
-  if (r.requestSentAt == null || r.firstTokenAt == null || r.lastTokenAt == null) return null;
+  if (
+    r.requestSentAt == null ||
+    r.firstTokenAt == null ||
+    r.lastTokenAt == null
+  )
+    return null;
   const ttft = r.firstTokenAt - r.requestSentAt;
   let tpot: number | null = null;
   const usage = parsed.value.usage;
@@ -180,7 +230,10 @@ const metadataSections = computed(() => {
   ];
 
   if (record.value.response?.status != null) {
-    requestItems.push({ key: "Status", value: String(record.value.response.status) });
+    requestItems.push({
+      key: "Status",
+      value: String(record.value.response.status),
+    });
   }
 
   requestItems.push({ key: "SSE", value: isStream.value ? "true" : "false" });
@@ -193,7 +246,10 @@ const metadataSections = computed(() => {
     requestItems.push({ key: "Provider", value: parsed.value.provider });
   }
 
-  requestItems.push({ key: "Type", value: isUserCall.value ? "USER" : "AGENT" });
+  requestItems.push({
+    key: "Type",
+    value: isUserCall.value ? "USER" : "AGENT",
+  });
 
   sections.push({
     title: "Request",
@@ -206,10 +262,23 @@ const metadataSections = computed(() => {
       title: "Token Usage",
       layout: "inline",
       items: [
-        { key: "Input (miss)", value: formatNumber(parsed.value.usage.inputMissTokens || 0) },
-        { key: "Input (hit)", value: formatNumber(parsed.value.usage.inputHitTokens || 0) },
-        { key: "Output", value: formatNumber(parsed.value.usage.outputTokens || 0) },
-        { key: "Total", value: formatNumber(totalTokens.value), modifier: "highlight" },
+        {
+          key: "Input (miss)",
+          value: formatNumber(parsed.value.usage.inputMissTokens || 0),
+        },
+        {
+          key: "Input (hit)",
+          value: formatNumber(parsed.value.usage.inputHitTokens || 0),
+        },
+        {
+          key: "Output",
+          value: formatNumber(parsed.value.usage.outputTokens || 0),
+        },
+        {
+          key: "Total",
+          value: formatNumber(totalTokens.value),
+          modifier: "highlight",
+        },
         { key: "Hit Rate", value: hitRate.value },
       ],
     });
@@ -247,10 +316,18 @@ async function loadRecord() {
   error.value = "";
   try {
     const [rec, prs, tl, sess] = await Promise.all([
-      api<RecordData>(`sessions/${encodeURIComponent(props.sessionId)}/records/${props.recordId}`),
-      api<ParsedData>(`sessions/${encodeURIComponent(props.sessionId)}/records/${props.recordId}/parsed`),
-      api<TimelineData>(`sessions/${encodeURIComponent(props.sessionId)}/timeline`),
-      api<{ session?: { title?: string } }>(`sessions/${encodeURIComponent(props.sessionId)}`),
+      api<RecordData>(
+        `sessions/${encodeURIComponent(props.sessionId)}/records/${props.recordId}`,
+      ),
+      api<ParsedData>(
+        `sessions/${encodeURIComponent(props.sessionId)}/records/${props.recordId}/parsed`,
+      ),
+      api<TimelineData>(
+        `sessions/${encodeURIComponent(props.sessionId)}/timeline`,
+      ),
+      api<{ session?: { title?: string } }>(
+        `sessions/${encodeURIComponent(props.sessionId)}`,
+      ),
     ]);
 
     record.value = rec;
@@ -287,7 +364,9 @@ onMounted(loadRecord);
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 
 .view-toggle button:hover {

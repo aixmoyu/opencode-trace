@@ -1,6 +1,9 @@
 <template>
   <div class="container">
-    <div v-if="loading" class="loading"><div class="spinner"></div>Loading timeline...</div>
+    <div v-if="loading" class="loading">
+      <div class="spinner"></div>
+      Loading timeline...
+    </div>
 
     <template v-else-if="error">
       <div class="error-banner">{{ error }}</div>
@@ -9,16 +12,26 @@
     <template v-else>
       <div class="page-title">
         {{ displayTitle }}
-        <span v-if="displaySubtitle" class="subtitle">{{ displaySubtitle }}</span>
+        <span v-if="displaySubtitle" class="subtitle">{{
+          displaySubtitle
+        }}</span>
         <span class="count">{{ records.length }} requests</span>
       </div>
 
-      <MetadataCard v-if="metadata" title="Session Statistics" :sections="metadataSections" />
+      <MetadataCard
+        v-if="metadata"
+        title="Session Statistics"
+        :sections="metadataSections"
+      />
 
       <div class="timeline-controls">
         <label class="sort-label">
           <span class="sort-label-text">Sort:</span>
-          <select class="sort-select" aria-label="Sort timeline" v-model="sortMode">
+          <select
+            class="sort-select"
+            aria-label="Sort timeline"
+            v-model="sortMode"
+          >
             <option value="time_asc">Time (oldest)</option>
             <option value="time_desc">Time (newest)</option>
             <option value="duration_asc">Duration (shortest)</option>
@@ -37,22 +50,40 @@
             role="button"
             :aria-label="`View request #${rec.id} details`"
             @click="router.push(`/session/${sessionId}/record/${rec.id}`)"
-            @keydown.enter="router.push(`/session/${sessionId}/record/${rec.id}`)"
+            @keydown.enter="
+              router.push(`/session/${sessionId}/record/${rec.id}`)
+            "
           >
             <div class="timeline-card-header">
               <div class="left">
                 <span class="req-num">#{{ rec.id }}</span>
-                <span :class="['call-type', getCallType(rec.id)]" :title="getCallTypeTitle(rec.id)">
+                <span
+                  :class="['call-type', getCallType(rec.id)]"
+                  :title="getCallTypeTitle(rec.id)"
+                >
                   {{ getCallTypeLabel(rec.id) }}
                 </span>
                 <span class="url">{{ getUrlHost(rec) }}</span>
-                <ChangeSummary v-if="getChange(rec.id)" :change="getChange(rec.id)" />
+                <ChangeSummary
+                  v-if="getChange(rec.id)"
+                  :change="getChange(rec.id)"
+                />
               </div>
               <div class="right">
-                <span v-if="getInterDuration(rec.id) != null" class="time-badge gap">gap {{ formatDuration(getInterDuration(rec.id)!) }}</span>
-                <span class="time-badge dur">dur {{ formatExecDuration(rec) }}</span>
-                <span v-if="getModel(rec.id)" class="time-badge model">{{ getModel(rec.id) }}</span>
-                <span v-if="rec.provider" class="time-badge provider">{{ rec.provider }}</span>
+                <span
+                  v-if="getInterDuration(rec.id) != null"
+                  class="time-badge gap"
+                  >gap {{ formatDuration(getInterDuration(rec.id)!) }}</span
+                >
+                <span class="time-badge dur"
+                  >dur {{ formatExecDuration(rec) }}</span
+                >
+                <span v-if="getModel(rec.id)" class="time-badge model">{{
+                  getModel(rec.id)
+                }}</span>
+                <span v-if="rec.provider" class="time-badge provider">{{
+                  rec.provider
+                }}</span>
               </div>
             </div>
           </div>
@@ -66,7 +97,12 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../composables/useApi";
-import { esc, formatNumber, formatLatency, formatDuration } from "../utils/format";
+import {
+  esc,
+  formatNumber,
+  formatLatency,
+  formatDuration,
+} from "../utils/format";
 import ChangeSummary from "../components/ChangeSummary.vue";
 import MetadataCard from "../components/MetadataCard.vue";
 
@@ -134,7 +170,9 @@ const session = ref<{ title?: string }>({});
 const sortMode = ref("time_asc");
 
 const displayTitle = computed(() => session.value.title || props.sessionId);
-const displaySubtitle = computed(() => session.value.title ? props.sessionId : "");
+const displaySubtitle = computed(() =>
+  session.value.title ? props.sessionId : "",
+);
 
 const cacheHitRate = computed(() => {
   const rate = metadata.value?.tokenUsage?.cacheHitRate;
@@ -161,10 +199,23 @@ const metadataSections = computed(() => {
       title: "Token Usage",
       layout: "inline",
       items: [
-        { key: "Input (miss)", value: formatNumber(metadata.value.tokenUsage.inputMissTokens) },
-        { key: "Input (hit)", value: formatNumber(metadata.value.tokenUsage.inputHitTokens) },
-        { key: "Output", value: formatNumber(metadata.value.tokenUsage.outputTokens) },
-        { key: "Total", value: formatNumber(metadata.value.tokenUsage.totalTokens), modifier: "highlight" },
+        {
+          key: "Input (miss)",
+          value: formatNumber(metadata.value.tokenUsage.inputMissTokens),
+        },
+        {
+          key: "Input (hit)",
+          value: formatNumber(metadata.value.tokenUsage.inputHitTokens),
+        },
+        {
+          key: "Output",
+          value: formatNumber(metadata.value.tokenUsage.outputTokens),
+        },
+        {
+          key: "Total",
+          value: formatNumber(metadata.value.tokenUsage.totalTokens),
+          modifier: "highlight",
+        },
         { key: "Hit Rate", value: cacheHitRate.value },
       ],
     });
@@ -172,14 +223,31 @@ const metadataSections = computed(() => {
 
   if (metadata.value.durationStats) {
     const timeItems: any[] = [
-      { key: "Wall Time", value: formatDuration(metadata.value.durationStats.wallTime) },
-      { key: "Request Time", value: formatDuration(metadata.value.durationStats.totalRequestDuration) },
+      {
+        key: "Wall Time",
+        value: formatDuration(metadata.value.durationStats.wallTime),
+      },
+      {
+        key: "Request Time",
+        value: formatDuration(
+          metadata.value.durationStats.totalRequestDuration,
+        ),
+      },
     ];
 
-    if (metadata.value.latencyStats && metadata.value.latencyStats.streamRequestCount > 0) {
+    if (
+      metadata.value.latencyStats &&
+      metadata.value.latencyStats.streamRequestCount > 0
+    ) {
       timeItems.push(
-        { key: "TTFT", value: `${formatLatency(metadata.value.latencyStats.avgTTFT)} / ${formatLatency(metadata.value.latencyStats.maxTTFT)}` },
-        { key: "TPOT", value: `${formatLatency(metadata.value.latencyStats.avgTPOT)} / ${formatLatency(metadata.value.latencyStats.maxTPOT)}` }
+        {
+          key: "TTFT",
+          value: `${formatLatency(metadata.value.latencyStats.avgTTFT)} / ${formatLatency(metadata.value.latencyStats.maxTTFT)}`,
+        },
+        {
+          key: "TPOT",
+          value: `${formatLatency(metadata.value.latencyStats.avgTPOT)} / ${formatLatency(metadata.value.latencyStats.maxTPOT)}`,
+        },
       );
     }
 
@@ -196,7 +264,11 @@ const metadataSections = computed(() => {
     items: [
       { key: "User", value: formatNumber(userCount.value) },
       { key: "Agent", value: formatNumber(agentCount.value) },
-      { key: "Total", value: formatNumber(userCount.value + agentCount.value), modifier: "highlight" },
+      {
+        key: "Total",
+        value: formatNumber(userCount.value + agentCount.value),
+        modifier: "highlight",
+      },
     ],
   });
 
@@ -217,7 +289,11 @@ const metadataSections = computed(() => {
       title: "Parent Session",
       layout: "inline",
       items: [
-        { key: "Session", value: metadata.value.parentSession, link: `/session/${metadata.value.parentSession}` },
+        {
+          key: "Session",
+          value: metadata.value.parentSession,
+          link: `/session/${metadata.value.parentSession}`,
+        },
       ],
     });
   }
@@ -233,7 +309,10 @@ const sortedRecords = computed(() => {
     recs.sort((a, b) => a.id - b.id);
   } else if (sortMode.value === "time_desc") {
     recs.sort((a, b) => b.id - a.id);
-  } else if (sortMode.value === "duration_asc" || sortMode.value === "duration_desc") {
+  } else if (
+    sortMode.value === "duration_asc" ||
+    sortMode.value === "duration_desc"
+  ) {
     recs.sort((a, b) => {
       const aDur = getRecordDuration(a);
       const bDur = getRecordDuration(b);
@@ -293,12 +372,16 @@ function getCallTypeLabel(recordId: number): string {
 
 function getCallTypeTitle(recordId: number): string {
   const change = getChange(recordId);
-  return change?.isUserCall ? "Direct human request" : "AI automatic continuation";
+  return change?.isUserCall
+    ? "Direct human request"
+    : "AI automatic continuation";
 }
 
 function getUrlHost(rec: Record): string {
   try {
-    return rec.request?.url ? new URL(rec.request.url).host : (rec.request?.url || "");
+    return rec.request?.url
+      ? new URL(rec.request.url).host
+      : rec.request?.url || "";
   } catch {
     return rec.request?.url || "";
   }
@@ -310,7 +393,9 @@ async function loadTimeline() {
   try {
     const [data, tl, meta] = await Promise.all([
       api<any>(`sessions/${encodeURIComponent(props.sessionId)}`),
-      api<TimelineData>(`sessions/${encodeURIComponent(props.sessionId)}/timeline`),
+      api<TimelineData>(
+        `sessions/${encodeURIComponent(props.sessionId)}/timeline`,
+      ),
       api<Metadata>(`sessions/${encodeURIComponent(props.sessionId)}/metadata`),
     ]);
     records.value = data.records || [];
@@ -358,7 +443,7 @@ onMounted(loadTimeline);
 }
 
 .sort-select::after {
-  content: '';
+  content: "";
   position: absolute;
   right: 10px;
   top: 50%;

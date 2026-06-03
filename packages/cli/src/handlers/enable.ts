@@ -5,7 +5,10 @@ export async function cmdEnable(args: string[]): Promise<void> {
   await cmdSetEnabled(args, true);
 }
 
-export async function cmdSetEnabled(args: string[], enable: boolean): Promise<void> {
+export async function cmdSetEnabled(
+  args: string[],
+  enable: boolean,
+): Promise<void> {
   const { positional, flags } = parseFlags(args);
 
   let traceDir: string;
@@ -28,9 +31,13 @@ export async function cmdSetEnabled(args: string[], enable: boolean): Promise<vo
       process.exit(1);
     }
     record.setSessionEnabled(sessionId, enable, traceDir);
-    console.log(`Session ${sessionId} ${enable ? 'enabled' : 'disabled'} in ${mode} mode.`);
+    console.log(
+      `Session ${sessionId} ${enable ? "enabled" : "disabled"} in ${mode} mode.`,
+    );
   } else {
     record.setGlobalTraceEnabled(enable, traceDir);
-    console.log(`Global trace ${enable ? 'enabled' : 'disabled'} in ${mode} mode.`);
+    console.log(
+      `Global trace ${enable ? "enabled" : "disabled"} in ${mode} mode.`,
+    );
   }
 }

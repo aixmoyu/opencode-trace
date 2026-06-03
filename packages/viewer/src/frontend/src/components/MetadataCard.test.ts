@@ -43,9 +43,7 @@ describe("MetadataCard", () => {
         sections: [
           {
             title: "Stats",
-            items: [
-              { key: "Total", value: "150", modifier: "highlight" },
-            ],
+            items: [{ key: "Total", value: "150", modifier: "highlight" }],
           },
         ],
       },

@@ -4,7 +4,9 @@ const parsers: Parser[] = [];
 
 export function registerParser(parser: Parser): void {
   if (parsers.some((p) => p.provider === parser.provider)) {
-    throw new Error(`Parser already registered for provider: ${parser.provider}`);
+    throw new Error(
+      `Parser already registered for provider: ${parser.provider}`,
+    );
   }
   parsers.push(parser);
 }

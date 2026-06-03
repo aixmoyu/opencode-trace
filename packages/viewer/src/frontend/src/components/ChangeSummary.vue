@@ -52,7 +52,12 @@ const parts = computed(() => {
   return result;
 });
 
-function renderCategorySummary(label: string, labelClass: string, added: Block[], removed: Block[]): string {
+function renderCategorySummary(
+  label: string,
+  labelClass: string,
+  added: Block[],
+  removed: Block[],
+): string {
   let s = `<span class="cs-group"><span class="cs-label ${labelClass}">${label}</span>`;
 
   const typeCounts: Record<string, { added: number; removed: number }> = {};
@@ -100,9 +105,18 @@ function renderCategorySummary(label: string, labelClass: string, added: Block[]
   border-radius: 2px;
 }
 
-.cs-label.sys { background: rgba(139, 92, 246, 0.15); color: var(--sys-color); }
-.cs-label.tool { background: rgba(255, 159, 10, 0.15); color: var(--warning); }
-.cs-label.msg { background: rgba(61, 139, 255, 0.15); color: var(--accent); }
+.cs-label.sys {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--sys-color);
+}
+.cs-label.tool {
+  background: rgba(255, 159, 10, 0.15);
+  color: var(--warning);
+}
+.cs-label.msg {
+  background: rgba(61, 139, 255, 0.15);
+  color: var(--accent);
+}
 
 .cs-types {
   display: inline-flex;

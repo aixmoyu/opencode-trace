@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, renameSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  renameSync,
+  statSync,
+} from "node:fs";
 import { promises as fs } from "node:fs";
 import initSqlJs, { Database, type SqlJsStatic } from "sql.js";
 import type { TraceRecord } from "../types.js";
@@ -110,7 +119,12 @@ export class StateManager {
     if (!this.db) return 0;
     try {
       const result = this.db.exec("SELECT MAX(version) FROM schema_version");
-      if (result.length === 0 || result[0].values.length === 0 || result[0].values[0][0] === null) return 0;
+      if (
+        result.length === 0 ||
+        result[0].values.length === 0 ||
+        result[0].values[0][0] === null
+      )
+        return 0;
       return result[0].values[0][0] as number;
     } catch (err) {
       logger.error("Failed to read schema version", {
@@ -125,13 +139,20 @@ export class StateManager {
     if (!this.db) return;
 
     const currentVersion = this.getSchemaVersion();
-    const pending = MIGRATIONS.filter(m => m.version > currentVersion).sort((a, b) => a.version - b.version);
+    const pending = MIGRATIONS.filter((m) => m.version > currentVersion).sort(
+      (a, b) => a.version - b.version,
+    );
 
     for (const migration of pending) {
       try {
         migration.migrate(this.db);
-        this.db.run("INSERT INTO schema_version (version) VALUES (?)", [migration.version]);
-        logger.info("Database migration applied", { version: migration.version, traceDir: this.traceDir });
+        this.db.run("INSERT INTO schema_version (version) VALUES (?)", [
+          migration.version,
+        ]);
+        logger.info("Database migration applied", {
+          version: migration.version,
+          traceDir: this.traceDir,
+        });
       } catch (err) {
         logger.error("Database migration failed", {
           version: migration.version,
@@ -198,16 +219,19 @@ export class StateManager {
       );
     `);
 
-    this.db.exec(`INSERT INTO schema_version (version) VALUES (${CURRENT_SCHEMA_VERSION})`);
+    this.db.exec(
+      `INSERT INTO schema_version (version) VALUES (${CURRENT_SCHEMA_VERSION})`,
+    );
   }
 
   private insertDefaultState(): void {
     if (!this.db) return;
 
     const existing = this.db.exec("SELECT key FROM global_state");
-    const existingKeys = existing.length > 0 && existing[0].values.length > 0
-      ? existing[0].values.map((v) => v[0] as string)
-      : [];
+    const existingKeys =
+      existing.length > 0 && existing[0].values.length > 0
+        ? existing[0].values.map((v) => v[0] as string)
+        : [];
 
     const defaults: { key: string; value: string | null }[] = [
       { key: "current_session", value: null },
@@ -217,7 +241,10 @@ export class StateManager {
 
     for (const { key, value } of defaults) {
       if (!existingKeys.includes(key)) {
-        this.db.run("INSERT INTO global_state (key, value) VALUES (?, ?)", [key, value]);
+        this.db.run("INSERT INTO global_state (key, value) VALUES (?, ?)", [
+          key,
+          value,
+        ]);
       }
     }
   }
@@ -238,7 +265,10 @@ export class StateManager {
   getGlobalState(key: string): string | null {
     if (!this.db) return null;
 
-    const result = this.db.exec("SELECT value FROM global_state WHERE key = ?", [key]);
+    const result = this.db.exec(
+      "SELECT value FROM global_state WHERE key = ?",
+      [key],
+    );
     if (result.length === 0 || result[0].values.length === 0) return null;
     return result[0].values[0][0] as string | null;
   }
@@ -246,7 +276,10 @@ export class StateManager {
   setGlobalState(key: string, value: string | null): void {
     if (!this.db) return;
 
-    this.db.run("UPDATE global_state SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?", [value, key]);
+    this.db.run(
+      "UPDATE global_state SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
+      [value, key],
+    );
     this.persistDb();
   }
 
@@ -259,7 +292,10 @@ export class StateManager {
     }
 
     const now = new Date().toISOString();
-    this.db.run("INSERT INTO sessions (id, status, started_at, request_count) VALUES (?, 'active', ?, 0)", [id, now]);
+    this.db.run(
+      "INSERT INTO sessions (id, status, started_at, request_count) VALUES (?, 'active', ?, 0)",
+      [id, now],
+    );
     this.setGlobalState("current_session", id);
 
     mkdirSync(join(this.traceDir, id), { recursive: true });
@@ -272,7 +308,10 @@ export class StateManager {
     if (!this.db) return;
 
     const now = new Date().toISOString();
-    this.db.run("UPDATE sessions SET status = 'stopped', ended_at = ? WHERE id = ?", [now, sessionId]);
+    this.db.run(
+      "UPDATE sessions SET status = 'stopped', ended_at = ? WHERE id = ?",
+      [now, sessionId],
+    );
 
     const current = this.getGlobalState("current_session");
     if (current === sessionId) {
@@ -287,7 +326,10 @@ export class StateManager {
       return this.getSessionFromFs(sessionId);
     }
 
-    const result = this.db.exec("SELECT id, status, started_at, ended_at, request_count FROM sessions WHERE id = ?", [sessionId]);
+    const result = this.db.exec(
+      "SELECT id, status, started_at, ended_at, request_count FROM sessions WHERE id = ?",
+      [sessionId],
+    );
     if (result.length === 0 || result[0].values.length === 0) return null;
 
     const row = result[0].values[0];
@@ -311,7 +353,9 @@ export class StateManager {
     if (!existsSync(sessionDir)) {
       if (this.db) {
         this.db.run("DELETE FROM sessions WHERE id = ?", [sessionId]);
-        this.db.run("DELETE FROM request_index WHERE session_id = ?", [sessionId]);
+        this.db.run("DELETE FROM request_index WHERE session_id = ?", [
+          sessionId,
+        ]);
         this.setGlobalState("current_session", null);
         this.persistDb();
       }
@@ -321,21 +365,35 @@ export class StateManager {
     return sessionId;
   }
 
-  async writeRecord(sessionId: string, seq: number, record: TraceRecord): Promise<void> {
+  async writeRecord(
+    sessionId: string,
+    seq: number,
+    record: TraceRecord,
+  ): Promise<void> {
     const sessionDir = join(this.traceDir, sessionId);
     await fs.mkdir(sessionDir, { recursive: true });
 
     await fs.writeFile(
       join(sessionDir, `${seq}.json`),
-      JSON.stringify(record, null, 2)
+      JSON.stringify(record, null, 2),
     );
 
     if (this.db) {
       try {
-        this.db.run("UPDATE sessions SET request_count = request_count + 1 WHERE id = ?", [sessionId]);
+        this.db.run(
+          "UPDATE sessions SET request_count = request_count + 1 WHERE id = ?",
+          [sessionId],
+        );
         this.db.run(
           "INSERT INTO request_index (session_id, seq, url, method, purpose, request_at) VALUES (?, ?, ?, ?, ?, ?)",
-          [sessionId, seq, record.request.url, record.request.method, record.purpose, record.requestAt]
+          [
+            sessionId,
+            seq,
+            record.request.url,
+            record.request.method,
+            record.purpose,
+            record.requestAt,
+          ],
         );
         this.persistDb();
       } catch (err) {
@@ -354,7 +412,12 @@ export class StateManager {
 
     const fsSessions = this.scanFsSessions();
     const dbResult = this.db.exec("SELECT id FROM sessions");
-    const dbSessions = dbResult.length > 0 ? dbResult[0].values.map((r: (string | number | null | Uint8Array)[]) => r[0] as string) : [];
+    const dbSessions =
+      dbResult.length > 0
+        ? dbResult[0].values.map(
+            (r: (string | number | null | Uint8Array)[]) => r[0] as string,
+          )
+        : [];
 
     for (const dbId of dbSessions) {
       if (!fsSessions.includes(dbId)) {
@@ -370,7 +433,14 @@ export class StateManager {
           const now = new Date().toISOString();
           this.db.run(
             "INSERT INTO sessions (id, status, started_at, ended_at, request_count, synced_at) VALUES (?, ?, ?, ?, ?, ?)",
-            [fsId, meta.status, meta.startedAt, meta.endedAt, meta.requestCount, now]
+            [
+              fsId,
+              meta.status,
+              meta.startedAt,
+              meta.endedAt,
+              meta.requestCount,
+              now,
+            ],
           );
         }
       }
@@ -384,21 +454,25 @@ export class StateManager {
       return this.listSessionsFromFs();
     }
 
-    const result = this.db.exec("SELECT id, status, started_at, ended_at, request_count FROM sessions ORDER BY started_at DESC");
+    const result = this.db.exec(
+      "SELECT id, status, started_at, ended_at, request_count FROM sessions ORDER BY started_at DESC",
+    );
     if (result.length === 0) return [];
 
-    return result[0].values.map((row: (string | number | null | Uint8Array)[]) => {
-      const sessionId = row[0] as string;
-      const metadata = this.readMetadataFile(sessionId);
-      return {
-        id: sessionId,
-        status: row[1] as SessionState["status"],
-        startedAt: row[2] as string | null,
-        endedAt: row[3] as string | null,
-        requestCount: row[4] as number,
-        ...metadata,
-      };
-    });
+    return result[0].values.map(
+      (row: (string | number | null | Uint8Array)[]) => {
+        const sessionId = row[0] as string;
+        const metadata = this.readMetadataFile(sessionId);
+        return {
+          id: sessionId,
+          status: row[1] as SessionState["status"],
+          startedAt: row[2] as string | null,
+          endedAt: row[3] as string | null,
+          requestCount: row[4] as number,
+          ...metadata,
+        };
+      },
+    );
   }
 
   private generateSessionId(): string {
@@ -408,7 +482,7 @@ export class StateManager {
   private scanFsSessions(): string[] {
     try {
       const entries = readdirSync(this.traceDir);
-      return entries.filter(e => {
+      return entries.filter((e) => {
         const full = join(this.traceDir, e);
         try {
           const stat = statSync(full);
@@ -430,7 +504,9 @@ export class StateManager {
     const sessionDir = join(this.traceDir, sessionId);
     if (!existsSync(sessionDir)) return null;
 
-    const files = readdirSync(sessionDir).filter(f => f.endsWith(".json") && f !== "metadata.json");
+    const files = readdirSync(sessionDir).filter(
+      (f) => f.endsWith(".json") && f !== "metadata.json",
+    );
     if (files.length === 0) {
       const metadata = this.readMetadataFile(sessionId);
       if (Object.keys(metadata).length > 0) {
@@ -488,7 +564,7 @@ export class StateManager {
     }
 
     return sessions.sort((a, b) =>
-      (b.startedAt ?? "").localeCompare(a.startedAt ?? "")
+      (b.startedAt ?? "").localeCompare(a.startedAt ?? ""),
     );
   }
 
@@ -516,7 +592,10 @@ export class StateManager {
     }
   }
 
-  private writeMetadataFile(sessionId: string, metadata: SessionMetadata): void {
+  private writeMetadataFile(
+    sessionId: string,
+    metadata: SessionMetadata,
+  ): void {
     const sessionDir = join(this.traceDir, sessionId);
     if (!existsSync(sessionDir)) {
       mkdirSync(sessionDir, { recursive: true });
@@ -526,7 +605,10 @@ export class StateManager {
     writeFileSync(metaPath, JSON.stringify(metadata, null, 2), "utf-8");
   }
 
-  updateSessionMetadata(sessionId: string, metadata: { title?: string; parentID?: string; folderPath?: string }): void {
+  updateSessionMetadata(
+    sessionId: string,
+    metadata: { title?: string; parentID?: string; folderPath?: string },
+  ): void {
     const existing = this.readMetadataFile(sessionId);
     const updated: SessionMetadata = { ...existing };
 
@@ -570,7 +652,8 @@ export class StateManager {
   }
 
   isTraceEnabled(sessionId?: string): boolean {
-    const globalEnabled = this.getGlobalState("global_trace_enabled") === "true";
+    const globalEnabled =
+      this.getGlobalState("global_trace_enabled") === "true";
 
     if (globalEnabled) return true;
 

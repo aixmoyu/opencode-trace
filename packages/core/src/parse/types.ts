@@ -1,4 +1,11 @@
-export type BlockType = "text" | "thinking" | "td" | "tc" | "tr" | "image" | "other";
+export type BlockType =
+  | "text"
+  | "thinking"
+  | "td"
+  | "tc"
+  | "tr"
+  | "image"
+  | "other";
 
 export interface TextBlock {
   type: "text";
@@ -40,7 +47,14 @@ export interface OtherBlock {
   raw: unknown;
 }
 
-export type Block = TextBlock | ThinkingBlock | ToolDefinitionBlock | ToolCallBlock | ToolResultBlock | ImageBlock | OtherBlock;
+export type Block =
+  | TextBlock
+  | ThinkingBlock
+  | ToolDefinitionBlock
+  | ToolCallBlock
+  | ToolResultBlock
+  | ImageBlock
+  | OtherBlock;
 
 export interface Entry {
   id: string;

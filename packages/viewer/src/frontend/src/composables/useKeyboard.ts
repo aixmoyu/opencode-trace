@@ -1,6 +1,8 @@
 import { onMounted, onUnmounted } from "vue";
 
-export function useKeyboard(handlers: Record<string, (e: KeyboardEvent) => void>) {
+export function useKeyboard(
+  handlers: Record<string, (e: KeyboardEvent) => void>,
+) {
   function onKeydown(e: KeyboardEvent) {
     const handler = handlers[e.key];
     if (handler) {

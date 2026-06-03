@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { conversationToXML, timelineToXML } from "../../format/xml.js";
 import type { Conversation, Entry } from "../../parse/types.js";
-import type { SessionTimeline, RequestChange, Delta } from "../../query/types.js";
+import type {
+  SessionTimeline,
+  RequestChange,
+  Delta,
+} from "../../query/types.js";
 
 describe("XML Format", () => {
   describe("conversationToXML", () => {
@@ -29,8 +33,8 @@ describe("XML Format", () => {
       expect(xml).toContain("<provider>anthropic</provider>");
       expect(xml).toContain("<model>claude-3</model>");
       expect(xml).toContain("<msgs>");
-      expect(xml).toContain("<entry id=\"msg-1\" role=\"user\"");
-      expect(xml).toContain("<block type=\"text\">Hello</block>");
+      expect(xml).toContain('<entry id="msg-1" role="user"');
+      expect(xml).toContain('<block type="text">Hello</block>');
       expect(xml).toContain("</conversation>");
     });
 
@@ -60,9 +64,9 @@ describe("XML Format", () => {
 
       const xml = conversationToXML(conv);
       expect(xml).toContain("<sys>");
-      expect(xml).toContain("<block type=\"text\">System prompt</block>");
+      expect(xml).toContain('<block type="text">System prompt</block>');
       expect(xml).toContain("<tool>");
-      expect(xml).toContain("<block type=\"td\" name=\"bash\"");
+      expect(xml).toContain('<block type="td" name="bash"');
     });
   });
 
@@ -93,8 +97,8 @@ describe("XML Format", () => {
       expect(xml).toContain("<sessionId>session-123</sessionId>");
       expect(xml).toContain("<totalRequests>2</totalRequests>");
       expect(xml).toContain("<changes>");
-      expect(xml).toContain("<change requestId=\"2\"");
-      expect(xml).toContain("<block type=\"text\">New message</block>");
+      expect(xml).toContain('<change requestId="2"');
+      expect(xml).toContain('<block type="text">New message</block>');
       expect(xml).toContain("</timeline>");
     });
 
@@ -112,7 +116,14 @@ describe("XML Format", () => {
               },
               tool: {
                 id: "tool-1",
-                removed: [{ type: "td", name: "bash", description: null, inputSchema: {} }],
+                removed: [
+                  {
+                    type: "td",
+                    name: "bash",
+                    description: null,
+                    inputSchema: {},
+                  },
+                ],
               },
               msgs: [],
             },

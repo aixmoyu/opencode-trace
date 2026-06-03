@@ -25,7 +25,13 @@ export const anthropicParser: Parser = {
 
   parseRequest(body: unknown): Conversation {
     if (!isRecord(body)) {
-      return { provider: this.provider, model: null, msgs: [], usage: null, stream: false };
+      return {
+        provider: this.provider,
+        model: null,
+        msgs: [],
+        usage: null,
+        stream: false,
+      };
     }
 
     const sysBlocks: Block[] = [];
@@ -35,7 +41,11 @@ export const anthropicParser: Parser = {
       for (const b of body.system as unknown[]) {
         if (typeof b === "string") {
           sysBlocks.push(createTextBlock(b));
-        } else if (isRecord(b) && b.type === "text" && typeof b.text === "string") {
+        } else if (
+          isRecord(b) &&
+          b.type === "text" &&
+          typeof b.text === "string"
+        ) {
           sysBlocks.push(createTextBlock(b.text));
         }
       }
@@ -45,11 +55,13 @@ export const anthropicParser: Parser = {
     if (Array.isArray(body.tools)) {
       for (const tool of body.tools) {
         if (!isRecord(tool)) continue;
-        toolBlocks.push(createToolDefinitionBlock(
-          String(tool.name ?? ""),
-          typeof tool.description === "string" ? tool.description : null,
-          tool.input_schema ?? null
-        ));
+        toolBlocks.push(
+          createToolDefinitionBlock(
+            String(tool.name ?? ""),
+            typeof tool.description === "string" ? tool.description : null,
+            tool.input_schema ?? null,
+          ),
+        );
       }
     }
 
@@ -57,7 +69,10 @@ export const anthropicParser: Parser = {
     if (Array.isArray(body.messages)) {
       for (const msg of body.messages) {
         if (!isRecord(msg)) continue;
-        const role = String(msg.role ?? "user") as "user" | "assistant" | "tool";
+        const role = String(msg.role ?? "user") as
+          | "user"
+          | "assistant"
+          | "tool";
         const blocks: Block[] = [];
 
         if (typeof msg.content === "string") {
@@ -69,19 +84,25 @@ export const anthropicParser: Parser = {
             } else if (isRecord(block)) {
               if (block.type === "text" && typeof block.text === "string") {
                 blocks.push(createTextBlock(block.text));
-              } else if (block.type === "thinking" && typeof block.thinking === "string") {
+              } else if (
+                block.type === "thinking" &&
+                typeof block.thinking === "string"
+              ) {
                 blocks.push(createThinkingBlock(block.thinking));
               } else if (block.type === "image" && isRecord(block.source)) {
                 blocks.push(createImageBlock(block.source));
               } else if (block.type === "tool_use") {
-                const input = typeof block.input === "string" 
-                  ? block.input 
-                  : JSON.stringify(block.input ?? {});
-                blocks.push(createToolCallBlock(
-                  String(block.id ?? ""),
-                  String(block.name ?? ""),
-                  input
-                ));
+                const input =
+                  typeof block.input === "string"
+                    ? block.input
+                    : JSON.stringify(block.input ?? {});
+                blocks.push(
+                  createToolCallBlock(
+                    String(block.id ?? ""),
+                    String(block.name ?? ""),
+                    input,
+                  ),
+                );
               } else if (block.type === "tool_result") {
                 let contentStr = "";
                 if (typeof block.content === "string") {
@@ -90,15 +111,22 @@ export const anthropicParser: Parser = {
                   contentStr = (block.content as unknown[])
                     .map((c: unknown) => {
                       if (typeof c === "string") return c;
-                      if (isRecord(c) && c.type === "text" && typeof c.text === "string") return c.text;
+                      if (
+                        isRecord(c) &&
+                        c.type === "text" &&
+                        typeof c.text === "string"
+                      )
+                        return c.text;
                       return "";
                     })
                     .join("");
                 }
-                blocks.push(createToolResultBlock(
-                  String(block.tool_use_id ?? ""),
-                  contentStr
-                ));
+                blocks.push(
+                  createToolResultBlock(
+                    String(block.tool_use_id ?? ""),
+                    contentStr,
+                  ),
+                );
               } else {
                 blocks.push(createOtherBlock(block));
               }
@@ -136,17 +164,23 @@ export const anthropicParser: Parser = {
         if (!isRecord(block)) continue;
         if (block.type === "text" && typeof block.text === "string") {
           blocks.push(createTextBlock(block.text));
-        } else if (block.type === "thinking" && typeof block.thinking === "string") {
+        } else if (
+          block.type === "thinking" &&
+          typeof block.thinking === "string"
+        ) {
           blocks.push(createThinkingBlock(block.thinking));
         } else if (block.type === "tool_use") {
-          const input = typeof block.input === "string" 
-            ? block.input 
-            : JSON.stringify(block.input ?? {});
-          blocks.push(createToolCallBlock(
-            String(block.id ?? ""),
-            String(block.name ?? ""),
-            input
-          ));
+          const input =
+            typeof block.input === "string"
+              ? block.input
+              : JSON.stringify(block.input ?? {});
+          blocks.push(
+            createToolCallBlock(
+              String(block.id ?? ""),
+              String(block.name ?? ""),
+              input,
+            ),
+          );
         } else {
           blocks.push(createOtherBlock(block));
         }
@@ -160,12 +194,17 @@ export const anthropicParser: Parser = {
     const usage = body.usage;
     let parsedUsage: Conversation["usage"] = null;
     if (isRecord(usage)) {
-      const inputTokens = typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
-      const outputTokens = typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
-      const cachedTokens = typeof usage.cache_read_input_tokens === "number" ? usage.cache_read_input_tokens : 0;
-      
+      const inputTokens =
+        typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
+      const outputTokens =
+        typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
+      const cachedTokens =
+        typeof usage.cache_read_input_tokens === "number"
+          ? usage.cache_read_input_tokens
+          : 0;
+
       const inputMiss = inputTokens - cachedTokens;
-      
+
       parsedUsage = {
         inputMissTokens: inputMiss > 0 ? inputMiss : null,
         inputHitTokens: cachedTokens > 0 ? cachedTokens : null,

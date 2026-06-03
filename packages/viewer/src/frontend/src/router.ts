@@ -7,8 +7,18 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: "/", name: "sessions", component: SessionsView },
-    { path: "/session/:sessionId", name: "timeline", component: TimelineView, props: true },
-    { path: "/session/:sessionId/record/:recordId", name: "record", component: RecordView, props: true },
+    {
+      path: "/session/:sessionId",
+      name: "timeline",
+      component: TimelineView,
+      props: true,
+    },
+    {
+      path: "/session/:sessionId/record/:recordId",
+      name: "record",
+      component: RecordView,
+      props: true,
+    },
     { path: "/:pathMatch(.*)*", redirect: "/" },
   ],
 });

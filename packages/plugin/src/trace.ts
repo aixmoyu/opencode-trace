@@ -1,4 +1,9 @@
-import type { Plugin, PluginModule, Hooks, PluginInput } from "@opencode-ai/plugin";
+import type {
+  Plugin,
+  PluginModule,
+  Hooks,
+  PluginInput,
+} from "@opencode-ai/plugin";
 import type { Event, Session } from "@opencode-ai/sdk";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -44,7 +49,7 @@ export function _resetForTesting(): void {
 const plugin: Plugin = async (input: PluginInput) => {
   const globalDir = join(homedir(), ".opencode-trace");
   const localDir = join(input.directory, ".opencode-trace");
-  const instance = new TracePlugin(globalDir, localDir);
+  const instance = new TracePlugin({ globalDir, localDir });
 
   instance.installInterceptor();
   await instance.initStateManager();
@@ -59,7 +64,10 @@ const plugin: Plugin = async (input: PluginInput) => {
     event: async ({ event }: { event: Event }) => {
       if (!instance.getStateManager()) return;
 
-      if (event.type === "session.created" || event.type === "session.updated") {
+      if (
+        event.type === "session.created" ||
+        event.type === "session.updated"
+      ) {
         const session = (event.properties as { info: Session }).info;
 
         const existing = instance.getStateManager()!.getSession(session.id);
@@ -74,68 +82,91 @@ const plugin: Plugin = async (input: PluginInput) => {
         });
 
         if (session.parentID) {
-          instance.getStateManager()!.addSubSession(session.parentID, session.id);
+          instance
+            .getStateManager()!
+            .addSubSession(session.parentID, session.id);
         }
       }
     },
 
     "tool.execute.after": async (
       input: { tool: string; sessionID: string; callID: string; args: unknown },
-      output: { title: string; output: string; metadata: unknown }
+      output: { title: string; output: string; metadata: unknown },
     ) => {
       if (!instance.getStateManager()) return;
 
       if (input.tool === "task") {
         const metadata = output.metadata as Record<string, unknown> | undefined;
         if (metadata && typeof metadata.session_id === "string") {
-          instance.getStateManager()!.addSubSession(input.sessionID, metadata.session_id);
+          instance
+            .getStateManager()!
+            .addSubSession(input.sessionID, metadata.session_id);
         }
       }
     },
 
     tool: {
       trace_enable: {
-        description: "Enable trace recording for the current session. When global trace is disabled, only enabled sessions will be recorded.",
+        description:
+          "Enable trace recording for the current session. When global trace is disabled, only enabled sessions will be recorded.",
         args: {},
         execute: async (_, context) => {
           if (!instance.getStateManager()) {
             return "StateManager not initialized";
           }
-          instance.getStateManager()!.setSessionEnabled(context.sessionID, true);
+          instance
+            .getStateManager()!
+            .setSessionEnabled(context.sessionID, true);
           return `Trace enabled for session ${context.sessionID}`;
         },
       },
       trace_disable: {
-        description: "Disable trace recording for the current session. This session will not be recorded even if global trace is enabled.",
+        description:
+          "Disable trace recording for the current session. This session will not be recorded even if global trace is enabled.",
         args: {},
         execute: async (_, context) => {
           if (!instance.getStateManager()) {
             return "StateManager not initialized";
           }
-          instance.getStateManager()!.setSessionEnabled(context.sessionID, false);
+          instance
+            .getStateManager()!
+            .setSessionEnabled(context.sessionID, false);
           return `Trace disabled for session ${context.sessionID}`;
         },
       },
       trace_status: {
-        description: "Check the trace recording status for the current session. Shows both global and session-level status.",
+        description:
+          "Check the trace recording status for the current session. Shows both global and session-level status.",
         args: {},
         execute: async (_, context) => {
           if (!instance.getStateManager()) {
             return "StateManager not initialized";
           }
-          const globalEnabled = instance.getStateManager()!.getGlobalState("global_trace_enabled") === "true";
-          const sessionEnabled = instance.getStateManager()!.getSessionEnabled(context.sessionID);
-          const willRecord = instance.getStateManager()!.isTraceEnabled(context.sessionID);
-          return JSON.stringify({
-            globalEnabled,
-            sessionEnabled,
-            willRecord,
-            sessionId: context.sessionID,
-          }, null, 2);
+          const globalEnabled =
+            instance
+              .getStateManager()!
+              .getGlobalState("global_trace_enabled") === "true";
+          const sessionEnabled = instance
+            .getStateManager()!
+            .getSessionEnabled(context.sessionID);
+          const willRecord = instance
+            .getStateManager()!
+            .isTraceEnabled(context.sessionID);
+          return JSON.stringify(
+            {
+              globalEnabled,
+              sessionEnabled,
+              willRecord,
+              sessionId: context.sessionID,
+            },
+            null,
+            2,
+          );
         },
       },
       trace_use_global: {
-        description: "Switch to global storage mode. Traces will be saved to ~/.opencode-trace (default).",
+        description:
+          "Switch to global storage mode. Traces will be saved to ~/.opencode-trace (default).",
         args: {},
         execute: async (_, context) => {
           if (!instance.getStateManager()) {
@@ -146,7 +177,8 @@ const plugin: Plugin = async (input: PluginInput) => {
         },
       },
       trace_use_local: {
-        description: "Switch to local storage mode. Traces will be saved to .opencode-trace in the current directory.",
+        description:
+          "Switch to local storage mode. Traces will be saved to .opencode-trace in the current directory.",
         args: {},
         execute: async (_, context) => {
           if (!instance.getStateManager()) {
@@ -157,7 +189,8 @@ const plugin: Plugin = async (input: PluginInput) => {
         },
       },
       trace_storage_status: {
-        description: "Check current storage mode (global or local) and directories.",
+        description:
+          "Check current storage mode (global or local) and directories.",
         args: {},
         execute: async (_, context) => {
           const status = instance.getStorageStatus();

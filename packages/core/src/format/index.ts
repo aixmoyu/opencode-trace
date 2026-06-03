@@ -1,30 +1,30 @@
-export { 
-  conversationToXML, 
-  timelineToXML, 
-  conversationsMapToXML, 
+export {
+  conversationToXML,
+  timelineToXML,
+  conversationsMapToXML,
   deltasMapToXML,
   entryToXML,
-  entryDeltaToXML
+  entryDeltaToXML,
 } from "./xml.js";
 
-export { 
-  collapseConversations, 
+export {
+  collapseConversations,
   collapseDeltas,
   collapseConversation,
   collapseDelta,
   collapseBlocksInEntry,
   getBlockId,
   writeBlockFile,
-  writeEntryFile
+  writeEntryFile,
 } from "./collapse.js";
 
-export type { 
-  CollapseOptions, 
+export type {
+  CollapseOptions,
   CollapsedExport,
   CollapsedConversation,
   CollapsedDelta,
   BlockFile,
   EntryFile,
   XMLRef,
-  CollapsedEntry
+  CollapsedEntry,
 } from "./collapse.js";

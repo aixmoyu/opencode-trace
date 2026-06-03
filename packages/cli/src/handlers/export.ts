@@ -1,8 +1,19 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { store, parse, query, record, format } from "@opencode-trace/core";
-import { parseFlags, parseRange, inRange, findSessionTraceDir } from "../utils.js";
-import { parseCollapse, parseCollapseBlocks, writeCollapsedExport, isConversationsMap, isDeltasMap } from "../formatter.js";
+import {
+  parseFlags,
+  parseRange,
+  inRange,
+  findSessionTraceDir,
+} from "../utils.js";
+import {
+  parseCollapse,
+  parseCollapseBlocks,
+  writeCollapsedExport,
+  isConversationsMap,
+  isDeltasMap,
+} from "../formatter.js";
 
 export async function cmdExport(args: string[]): Promise<void> {
   const { positional, flags } = parseFlags(args);
@@ -40,7 +51,9 @@ export async function cmdExport(args: string[]): Promise<void> {
   const range = flags.req ? parseRange(flags.req as string, lastReqId) : null;
 
   if (exportType === "raw" && flags.req) {
-    console.error("Warning: -r parameter is not applicable for raw export type");
+    console.error(
+      "Warning: -r parameter is not applicable for raw export type",
+    );
   }
 
   let data: unknown;
@@ -55,8 +68,10 @@ export async function cmdExport(args: string[]): Promise<void> {
       data = query.buildSessionMetadata(sessionId, parsedRecords);
       const sessionMeta = store.readSessionMetadata(sessionId, traceDir);
       if (sessionMeta) {
-        (data as any).createdAt = sessionMeta.createdAt ?? (data as any).createdAt;
-        (data as any).updatedAt = sessionMeta.updatedAt ?? (data as any).updatedAt;
+        (data as any).createdAt =
+          sessionMeta.createdAt ?? (data as any).createdAt;
+        (data as any).updatedAt =
+          sessionMeta.updatedAt ?? (data as any).updatedAt;
         (data as any).enabled = sessionMeta.enabled ?? false;
       }
       break;
@@ -79,12 +94,14 @@ export async function cmdExport(args: string[]): Promise<void> {
       }
 
       const collapseItems = parseCollapse(flags.collapse as string);
-      const collapseBlockTypes = parseCollapseBlocks(flags.collapseBlocks as string);
+      const collapseBlockTypes = parseCollapseBlocks(
+        flags.collapseBlocks as string,
+      );
 
       const result = format.collapseConversations(conversations, {
         collapse: collapseItems,
         collapseBlocks: collapseBlockTypes,
-        format: formatType as "json" | "xml"
+        format: formatType as "json" | "xml",
       });
 
       writeCollapsedExport(outputPath, result, formatType);
@@ -113,12 +130,14 @@ export async function cmdExport(args: string[]): Promise<void> {
       }
 
       const collapseItems = parseCollapse(flags.collapse as string);
-      const collapseBlockTypes = parseCollapseBlocks(flags.collapseBlocks as string);
+      const collapseBlockTypes = parseCollapseBlocks(
+        flags.collapseBlocks as string,
+      );
 
       const result = format.collapseDeltas(deltas, {
         collapse: collapseItems,
         collapseBlocks: collapseBlockTypes,
-        format: formatType as "json" | "xml"
+        format: formatType as "json" | "xml",
       });
 
       writeCollapsedExport(outputPath, result, formatType);

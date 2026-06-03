@@ -6,7 +6,12 @@ export { openaiChatParser } from "./openai-chat.js";
 export { openaiResponsesParser } from "./openai-responses.js";
 export { anthropicParser } from "./anthropic.js";
 
-export { detectAndParse, detectProvider, extractUsage, extractLatency } from "./detect.js";
+export {
+  detectAndParse,
+  detectProvider,
+  extractUsage,
+  extractLatency,
+} from "./detect.js";
 export type { LatencyInfo } from "./detect.js";
 export {
   generateId,

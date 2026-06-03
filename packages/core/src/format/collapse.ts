@@ -34,26 +34,36 @@ export function getBlockId(block: Block, index: number): string {
   }
 }
 
-export function writeBlockFile(block: Block, requestId: number, format: string): BlockFile {
-  const blockId = block.type === "tc" ? block.id 
-    : block.type === "tr" ? block.toolCallId 
-    : "0";
+export function writeBlockFile(
+  block: Block,
+  requestId: number,
+  format: string,
+): BlockFile {
+  const blockId =
+    block.type === "tc"
+      ? block.id
+      : block.type === "tr"
+        ? block.toolCallId
+        : "0";
 
   const extension = format === "xml" ? "xml" : "json";
   const refPath = `blocks/req-${requestId}-${block.type}-${blockId}.${extension}`;
-  const content = format === "xml" 
-    ? blockToXML(block, "")
-    : JSON.stringify(block);
+  const content =
+    format === "xml" ? blockToXML(block, "") : JSON.stringify(block);
 
   return { refPath, content };
 }
 
-export function writeEntryFile(entry: Entry, requestId: number, type: "sys" | "tool", format: string): EntryFile {
+export function writeEntryFile(
+  entry: Entry,
+  requestId: number,
+  type: "sys" | "tool",
+  format: string,
+): EntryFile {
   const extension = format === "xml" ? "xml" : "json";
   const refPath = `blocks/req-${requestId}-${type}.${extension}`;
-  const content = format === "xml" 
-    ? entryToXML(entry, "")
-    : JSON.stringify(entry);
+  const content =
+    format === "xml" ? entryToXML(entry, "") : JSON.stringify(entry);
 
   return { refPath, content };
 }
@@ -73,7 +83,7 @@ export function collapseBlocksInEntry(
   entry: Entry,
   requestId: number,
   collapseBlocks: BlockType[],
-  format: string
+  format: string,
 ): CollapsedEntry {
   const blockFiles = new Map<string, string>();
   const xmlRefs: XMLRef[] = [];
@@ -81,13 +91,13 @@ export function collapseBlocksInEntry(
 
   for (let i = 0; i < entry.blocks.length; i++) {
     const block = entry.blocks[i];
-    
+
     if (collapseBlocks.includes(block.type)) {
       const blockFile = writeBlockFile(block, requestId, format);
       blockFiles.set(blockFile.refPath, blockFile.content);
-      
+
       if (format === "json") {
-        newBlocks.push({ "$ref": blockFile.refPath } as unknown as Block);
+        newBlocks.push({ $ref: blockFile.refPath } as unknown as Block);
       } else {
         newBlocks.push(block);
         xmlRefs.push({ blockIndex: i, refPath: blockFile.refPath });
@@ -100,7 +110,7 @@ export function collapseBlocksInEntry(
   return {
     entry: { ...entry, blocks: newBlocks },
     blockFiles,
-    xmlRefs
+    xmlRefs,
   };
 }
 
@@ -115,18 +125,18 @@ function collapseEntryField(
   type: "sys" | "tool",
   shouldCollapse: boolean,
   format: string,
-  files: Map<string, string>
+  files: Map<string, string>,
 ): Entry | undefined {
   if (!entry || !shouldCollapse) {
     return entry;
   }
-  
+
   const entryFile = writeEntryFile(entry, requestId, type, format);
   files.set(entryFile.refPath, entryFile.content);
-  
+
   return format === "json"
-    ? { "$ref": entryFile.refPath } as unknown as Entry
-    : { ...entry, _xmlRef: entryFile.refPath } as unknown as Entry;
+    ? ({ $ref: entryFile.refPath } as unknown as Entry)
+    : ({ ...entry, _xmlRef: entryFile.refPath } as unknown as Entry);
 }
 
 function collapseDeltaEntryField(
@@ -135,21 +145,22 @@ function collapseDeltaEntryField(
   type: "sys" | "tool",
   shouldCollapse: boolean,
   format: string,
-  files: Map<string, string>
+  files: Map<string, string>,
 ): EntryDelta | undefined {
   if (!entry || !shouldCollapse) {
     return entry;
   }
-  
+
   const extension = format === "xml" ? "xml" : "json";
   const refPath = `blocks/req-${requestId}-${type}.${extension}`;
-  files.set(refPath, format === "xml" 
-    ? entryDeltaToXML(entry, "")
-    : JSON.stringify(entry));
-  
+  files.set(
+    refPath,
+    format === "xml" ? entryDeltaToXML(entry, "") : JSON.stringify(entry),
+  );
+
   return format === "json"
-    ? { "$ref": refPath } as unknown as EntryDelta
-    : { ...entry, _xmlRef: refPath } as unknown as EntryDelta;
+    ? ({ $ref: refPath } as unknown as EntryDelta)
+    : ({ ...entry, _xmlRef: refPath } as unknown as EntryDelta);
 }
 
 function collapseBlockArray(
@@ -157,18 +168,18 @@ function collapseBlockArray(
   collapseBlocks: BlockType[],
   requestId: number,
   format: string,
-  files: Map<string, string>
+  files: Map<string, string>,
 ): Block[] | undefined {
   if (!blocks) return undefined;
-  
-  return blocks.map(block => {
+
+  return blocks.map((block) => {
     if (!collapseBlocks.includes(block.type)) return block;
-    
+
     const blockFile = writeBlockFile(block, requestId, format);
     files.set(blockFile.refPath, blockFile.content);
-    
+
     return format === "json"
-      ? { "$ref": blockFile.refPath } as unknown as Block
+      ? ({ $ref: blockFile.refPath } as unknown as Block)
       : block;
   });
 }
@@ -176,7 +187,7 @@ function collapseBlockArray(
 export function collapseConversation(
   conversation: import("../parse/types.js").Conversation,
   requestId: number,
-  options: CollapseOptions
+  options: CollapseOptions,
 ): CollapsedConversation {
   const files = new Map<string, string>();
   const collapse = options.collapse ?? [];
@@ -188,27 +199,51 @@ export function collapseConversation(
     model: conversation.model,
     stream: conversation.stream,
     usage: conversation.usage,
-    msgs: conversation.msgs
+    msgs: conversation.msgs,
   };
 
-  result.sys = collapseEntryField(conversation.sys, requestId, "sys", collapse.includes("sys"), format, files);
-  result.tool = collapseEntryField(conversation.tool, requestId, "tool", collapse.includes("tool"), format, files);
+  result.sys = collapseEntryField(
+    conversation.sys,
+    requestId,
+    "sys",
+    collapse.includes("sys"),
+    format,
+    files,
+  );
+  result.tool = collapseEntryField(
+    conversation.tool,
+    requestId,
+    "tool",
+    collapse.includes("tool"),
+    format,
+    files,
+  );
 
   if (collapse.includes("msgs")) {
     const extension = format === "xml" ? "xml" : "json";
     const refPath = `blocks/req-${requestId}-msgs.${extension}`;
-    files.set(refPath, format === "xml"
-      ? conversation.msgs.map(m => entryToXML(m, "")).join("\n")
-      : JSON.stringify(conversation.msgs));
+    files.set(
+      refPath,
+      format === "xml"
+        ? conversation.msgs.map((m) => entryToXML(m, "")).join("\n")
+        : JSON.stringify(conversation.msgs),
+    );
     if (format === "json") {
-      result.msgs = [{ "$ref": refPath }] as unknown as Entry[];
+      result.msgs = [{ $ref: refPath }] as unknown as Entry[];
     } else {
-      result.msgs = [{ id: "msgs", blocks: [], _xmlRef: refPath }] as unknown as Entry[];
+      result.msgs = [
+        { id: "msgs", blocks: [], _xmlRef: refPath },
+      ] as unknown as Entry[];
     }
   } else if (collapseBlocks.length > 0) {
     const collapsedMsgs: Entry[] = [];
     for (const msg of conversation.msgs) {
-      const collapsed = collapseBlocksInEntry(msg, requestId, collapseBlocks, format);
+      const collapsed = collapseBlocksInEntry(
+        msg,
+        requestId,
+        collapseBlocks,
+        format,
+      );
       collapsedMsgs.push(collapsed.entry);
       for (const [path, content] of collapsed.blockFiles) {
         files.set(path, content);
@@ -224,10 +259,11 @@ export function collapseConversation(
 
 export function collapseConversations(
   conversations: Record<number, import("../parse/types.js").Conversation>,
-  options: CollapseOptions
+  options: CollapseOptions,
 ): CollapsedExport {
   const blocks = new Map<string, string>();
-  const collapsedMap: Record<number, import("../parse/types.js").Conversation> = {};
+  const collapsedMap: Record<number, import("../parse/types.js").Conversation> =
+    {};
 
   for (const [requestId, conversation] of Object.entries(conversations)) {
     const reqId = parseInt(requestId, 10);
@@ -240,15 +276,16 @@ export function collapseConversations(
   }
 
   const format = options.format ?? "json";
-  const main = format === "xml"
-    ? conversationsMapToCollapsedXML(collapsedMap)
-    : JSON.stringify(collapsedMap, null, 2);
+  const main =
+    format === "xml"
+      ? conversationsMapToCollapsedXML(collapsedMap)
+      : JSON.stringify(collapsedMap, null, 2);
 
   return { main, blocks };
 }
 
 function conversationsMapToCollapsedXML(
-  map: Record<number, import("../parse/types.js").Conversation>
+  map: Record<number, import("../parse/types.js").Conversation>,
 ): string {
   const lines: string[] = [];
   lines.push("<conversations>");
@@ -296,9 +333,15 @@ function conversationsMapToCollapsedXML(
 
     if (conv.usage) {
       lines.push("    <usage>");
-      lines.push(`      <inputMissTokens>${conv.usage.inputMissTokens ?? 0}</inputMissTokens>`);
-      lines.push(`      <inputHitTokens>${conv.usage.inputHitTokens ?? 0}</inputHitTokens>`);
-      lines.push(`      <outputTokens>${conv.usage.outputTokens ?? 0}</outputTokens>`);
+      lines.push(
+        `      <inputMissTokens>${conv.usage.inputMissTokens ?? 0}</inputMissTokens>`,
+      );
+      lines.push(
+        `      <inputHitTokens>${conv.usage.inputHitTokens ?? 0}</inputHitTokens>`,
+      );
+      lines.push(
+        `      <outputTokens>${conv.usage.outputTokens ?? 0}</outputTokens>`,
+      );
       lines.push("    </usage>");
     }
 
@@ -317,7 +360,7 @@ export interface CollapsedDelta {
 export function collapseDelta(
   delta: Delta,
   requestId: number,
-  options: CollapseOptions
+  options: CollapseOptions,
 ): CollapsedDelta {
   const files = new Map<string, string>();
   const collapse = options.collapse ?? [];
@@ -326,25 +369,56 @@ export function collapseDelta(
 
   const result: Delta = { msgs: delta.msgs };
 
-  result.sys = collapseDeltaEntryField(delta.sys, requestId, "sys", collapse.includes("sys"), format, files);
-  result.tool = collapseDeltaEntryField(delta.tool, requestId, "tool", collapse.includes("tool"), format, files);
+  result.sys = collapseDeltaEntryField(
+    delta.sys,
+    requestId,
+    "sys",
+    collapse.includes("sys"),
+    format,
+    files,
+  );
+  result.tool = collapseDeltaEntryField(
+    delta.tool,
+    requestId,
+    "tool",
+    collapse.includes("tool"),
+    format,
+    files,
+  );
 
   if (collapse.includes("msgs")) {
     const extension = format === "xml" ? "xml" : "json";
     const refPath = `blocks/req-${requestId}-msgs.${extension}`;
-    files.set(refPath, format === "xml"
-      ? delta.msgs.map(m => entryDeltaToXML(m, "")).join("\n")
-      : JSON.stringify(delta.msgs));
+    files.set(
+      refPath,
+      format === "xml"
+        ? delta.msgs.map((m) => entryDeltaToXML(m, "")).join("\n")
+        : JSON.stringify(delta.msgs),
+    );
     if (format === "json") {
-      result.msgs = [{ "$ref": refPath }] as unknown as EntryDelta[];
+      result.msgs = [{ $ref: refPath }] as unknown as EntryDelta[];
     } else {
-      result.msgs = [{ id: "msgs", added: [], _xmlRef: refPath }] as unknown as EntryDelta[];
+      result.msgs = [
+        { id: "msgs", added: [], _xmlRef: refPath },
+      ] as unknown as EntryDelta[];
     }
   } else if (collapseBlocks.length > 0) {
-    result.msgs = delta.msgs.map(msgDelta => ({
+    result.msgs = delta.msgs.map((msgDelta) => ({
       id: msgDelta.id,
-      added: collapseBlockArray(msgDelta.added, collapseBlocks, requestId, format, files),
-      removed: collapseBlockArray(msgDelta.removed, collapseBlocks, requestId, format, files)
+      added: collapseBlockArray(
+        msgDelta.added,
+        collapseBlocks,
+        requestId,
+        format,
+        files,
+      ),
+      removed: collapseBlockArray(
+        msgDelta.removed,
+        collapseBlocks,
+        requestId,
+        format,
+        files,
+      ),
     }));
   }
 
@@ -353,7 +427,7 @@ export function collapseDelta(
 
 export function collapseDeltas(
   deltas: Record<number, Delta>,
-  options: CollapseOptions
+  options: CollapseOptions,
 ): CollapsedExport {
   const blocks = new Map<string, string>();
   const collapsedMap: Record<number, Delta> = {};
@@ -368,9 +442,10 @@ export function collapseDeltas(
     }
   }
 
-  const main = options.format === "xml"
-    ? deltasMapToCollapsedXML(collapsedMap)
-    : JSON.stringify(collapsedMap, null, 2);
+  const main =
+    options.format === "xml"
+      ? deltasMapToCollapsedXML(collapsedMap)
+      : JSON.stringify(collapsedMap, null, 2);
 
   return { main, blocks };
 }

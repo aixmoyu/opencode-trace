@@ -1,6 +1,16 @@
 import type { Conversation, Entry, Block } from "../parse/types.js";
 import type { TraceRecord } from "../types.js";
-import type { RequestChange, SessionTimeline, Delta, EntryDelta, SessionMetadata, TokenUsage, LatencyStats, DurationStats, TimelineRecord } from "./types.js";
+import type {
+  RequestChange,
+  SessionTimeline,
+  Delta,
+  EntryDelta,
+  SessionMetadata,
+  TokenUsage,
+  LatencyStats,
+  DurationStats,
+  TimelineRecord,
+} from "./types.js";
 import { extractLatency } from "../parse/detect.js";
 
 function blockKey(block: Block): string {
@@ -32,15 +42,15 @@ export function diffConversations(
   prev: Conversation,
   curr: Conversation,
   currRequestId: number,
-  requestMsgs?: Entry[]
+  requestMsgs?: Entry[],
 ): RequestChange {
   const delta: Delta = { msgs: [] };
 
   if (prev.sys && curr.sys) {
     const prevKeys = new Set(prev.sys.blocks.map(blockKey));
     const currKeys = new Set(curr.sys.blocks.map(blockKey));
-    const added = curr.sys.blocks.filter(b => !prevKeys.has(blockKey(b)));
-    const removed = prev.sys.blocks.filter(b => !currKeys.has(blockKey(b)));
+    const added = curr.sys.blocks.filter((b) => !prevKeys.has(blockKey(b)));
+    const removed = prev.sys.blocks.filter((b) => !currKeys.has(blockKey(b)));
     if (added.length > 0 || removed.length > 0) {
       delta.sys = { id: prev.sys.id, added, removed };
     }
@@ -53,8 +63,8 @@ export function diffConversations(
   if (prev.tool && curr.tool) {
     const prevKeys = new Set(prev.tool.blocks.map(blockKey));
     const currKeys = new Set(curr.tool.blocks.map(blockKey));
-    const added = curr.tool.blocks.filter(b => !prevKeys.has(blockKey(b)));
-    const removed = prev.tool.blocks.filter(b => !currKeys.has(blockKey(b)));
+    const added = curr.tool.blocks.filter((b) => !prevKeys.has(blockKey(b)));
+    const removed = prev.tool.blocks.filter((b) => !currKeys.has(blockKey(b)));
     if (added.length > 0 || removed.length > 0) {
       delta.tool = { id: prev.tool.id, added, removed };
     }
@@ -83,8 +93,12 @@ export function diffConversations(
     } else {
       const prevBlockKeys = new Set(prevMsg.blocks.map(blockKey));
       const currBlockKeys = new Set(currMsg.blocks.map(blockKey));
-      const added = currMsg.blocks.filter(b => !prevBlockKeys.has(blockKey(b)));
-      const removed = prevMsg.blocks.filter(b => !currBlockKeys.has(blockKey(b)));
+      const added = currMsg.blocks.filter(
+        (b) => !prevBlockKeys.has(blockKey(b)),
+      );
+      const removed = prevMsg.blocks.filter(
+        (b) => !currBlockKeys.has(blockKey(b)),
+      );
       if (added.length > 0 || removed.length > 0) {
         delta.msgs.push({ id: currMsg.id, added, removed });
       }
@@ -108,9 +122,13 @@ export function diffConversations(
   };
 }
 
-function buildInitialChange(conv: Conversation, requestId: number, requestMsgs?: Entry[]): RequestChange {
+function buildInitialChange(
+  conv: Conversation,
+  requestId: number,
+  requestMsgs?: Entry[],
+): RequestChange {
   const delta: Delta = { msgs: [] };
-  
+
   if (conv.sys) {
     delta.sys = { id: conv.sys.id, added: conv.sys.blocks, removed: [] };
   }
@@ -120,9 +138,9 @@ function buildInitialChange(conv: Conversation, requestId: number, requestMsgs?:
   for (const msg of conv.msgs) {
     delta.msgs.push({ id: msg.id, added: msg.blocks, removed: [] });
   }
-  
+
   const isUserCall = checkIsUserCall(requestMsgs ?? conv.msgs);
-  
+
   return { requestId, delta, interRequestDuration: null, isUserCall };
 }
 
@@ -130,12 +148,12 @@ function checkIsUserCall(msgs: Entry[]): boolean {
   if (msgs.length === 0) return false;
   const lastMsg = msgs[msgs.length - 1];
   if (!lastMsg.blocks || lastMsg.blocks.length === 0) return false;
-  return lastMsg.blocks.some(b => b.type === "text");
+  return lastMsg.blocks.some((b) => b.type === "text");
 }
 
 export function buildSessionTimeline(
   sessionId: string,
-  records: TimelineRecord[]
+  records: TimelineRecord[],
 ): SessionTimeline {
   const changes: RequestChange[] = [];
   let prev: Conversation | null = null;
@@ -145,24 +163,24 @@ export function buildSessionTimeline(
     const curr = rec.parsed as Conversation;
     const requestMsgs = rec.requestMsgs;
     const requestAt = rec.requestAt;
-    
+
     let interRequestDuration: number | null = null;
     if (prevRequestAt && requestAt) {
       const prevTime = new Date(prevRequestAt).getTime();
       const currTime = new Date(requestAt).getTime();
       interRequestDuration = currTime - prevTime;
     }
-    
+
     let change: RequestChange;
     if (!prev) {
       change = buildInitialChange(curr, rec.id, requestMsgs);
     } else {
       change = diffConversations(prev, curr, rec.id, requestMsgs);
     }
-    
+
     change.interRequestDuration = interRequestDuration;
     changes.push(change);
-    
+
     prev = curr;
     prevRequestAt = requestAt ?? null;
   }
@@ -177,7 +195,7 @@ export function buildSessionTimeline(
 export function buildSessionMetadata(
   sessionId: string,
   records: { id: number; record?: TraceRecord; parsed: Conversation }[],
-  folderPath?: string
+  folderPath?: string,
 ): SessionMetadata {
   let inputMissTokens = 0;
   let inputHitTokens = 0;
@@ -208,7 +226,9 @@ export function buildSessionMetadata(
       if (rec.record.requestAt && rec.record.responseAt) {
         requestAtValues.push(rec.record.requestAt);
         responseAtValues.push(rec.record.responseAt);
-        const duration = new Date(rec.record.responseAt).getTime() - new Date(rec.record.requestAt).getTime();
+        const duration =
+          new Date(rec.record.responseAt).getTime() -
+          new Date(rec.record.requestAt).getTime();
         requestDurations.push(duration);
       }
     }
@@ -220,9 +240,15 @@ export function buildSessionMetadata(
 
   let latencyStats: LatencyStats | null = null;
   if (ttftValues.length > 0 || tpotValues.length > 0) {
-    const avgTTFT = ttftValues.length > 0 ? ttftValues.reduce((a, b) => a + b, 0) / ttftValues.length : null;
+    const avgTTFT =
+      ttftValues.length > 0
+        ? ttftValues.reduce((a, b) => a + b, 0) / ttftValues.length
+        : null;
     const maxTTFT = ttftValues.length > 0 ? Math.max(...ttftValues) : null;
-    const avgTPOT = tpotValues.length > 0 ? tpotValues.reduce((a, b) => a + b, 0) / tpotValues.length : null;
+    const avgTPOT =
+      tpotValues.length > 0
+        ? tpotValues.reduce((a, b) => a + b, 0) / tpotValues.length
+        : null;
     const maxTPOT = tpotValues.length > 0 ? Math.max(...tpotValues) : null;
 
     latencyStats = {
@@ -236,9 +262,10 @@ export function buildSessionMetadata(
 
   let durationStats: DurationStats | null = null;
   if (requestAtValues.length > 0 && responseAtValues.length > 0) {
-    const minRequestAt = requestAtValues.reduce((a, b) => a < b ? a : b);
-    const maxResponseAt = responseAtValues.reduce((a, b) => a > b ? a : b);
-    const wallTime = new Date(maxResponseAt).getTime() - new Date(minRequestAt).getTime();
+    const minRequestAt = requestAtValues.reduce((a, b) => (a < b ? a : b));
+    const maxResponseAt = responseAtValues.reduce((a, b) => (a > b ? a : b));
+    const wallTime =
+      new Date(maxResponseAt).getTime() - new Date(minRequestAt).getTime();
     const totalRequestDuration = requestDurations.reduce((a, b) => a + b, 0);
 
     durationStats = {

@@ -42,7 +42,10 @@ function sessionToRecording(session: SessionState | null): RecordingStatus {
   };
 }
 
-export async function startRecording(sessionId?: string, traceDir?: string): Promise<string> {
+export async function startRecording(
+  sessionId?: string,
+  traceDir?: string,
+): Promise<string> {
   const dir = resolveDir(traceDir);
   const manager = await getManager(dir);
   return manager.startSession(sessionId);
@@ -72,7 +75,10 @@ export function stopRecording(sessionId: string, traceDir?: string): boolean {
   }
 }
 
-export function setGlobalTraceEnabled(enabled: boolean, traceDir?: string): void {
+export function setGlobalTraceEnabled(
+  enabled: boolean,
+  traceDir?: string,
+): void {
   const dir = resolveDir(traceDir);
   const manager = getManagerSync(dir);
   if (manager) {
@@ -89,7 +95,11 @@ export function getGlobalTraceEnabled(traceDir?: string): boolean {
   return true;
 }
 
-export function setSessionEnabled(sessionId: string, enabled: boolean, traceDir?: string): void {
+export function setSessionEnabled(
+  sessionId: string,
+  enabled: boolean,
+  traceDir?: string,
+): void {
   const dir = resolveDir(traceDir);
   const manager = getManagerSync(dir);
   if (manager) {
@@ -97,7 +107,10 @@ export function setSessionEnabled(sessionId: string, enabled: boolean, traceDir?
   }
 }
 
-export function getSessionEnabled(sessionId: string, traceDir?: string): boolean {
+export function getSessionEnabled(
+  sessionId: string,
+  traceDir?: string,
+): boolean {
   const dir = resolveDir(traceDir);
   const manager = getManagerSync(dir);
   if (manager) {
@@ -128,7 +141,10 @@ export function isRecording(sessionId: string, traceDir?: string): boolean {
   return existsSync(markerPath);
 }
 
-export function getRecordingStatus(sessionId: string, traceDir?: string): RecordingStatus {
+export function getRecordingStatus(
+  sessionId: string,
+  traceDir?: string,
+): RecordingStatus {
   const dir = resolveDir(traceDir);
   const manager = getManagerSync(dir);
 
@@ -162,8 +178,9 @@ export function listRecordings(traceDir?: string): RecordingStatus[] {
   const manager = getManagerSync(dir);
 
   if (manager) {
-    return manager.listSessions()
-      .filter(s => s.status === "active")
+    return manager
+      .listSessions()
+      .filter((s) => s.status === "active")
       .map(sessionToRecording);
   }
 

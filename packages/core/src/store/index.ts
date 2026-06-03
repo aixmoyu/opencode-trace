@@ -1,4 +1,12 @@
-import { readdirSync, readFileSync, statSync, existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import {
+  readdirSync,
+  readFileSync,
+  statSync,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+} from "node:fs";
 import { join } from "node:path";
 import archiver from "archiver";
 import AdmZip from "adm-zip";
@@ -41,7 +49,7 @@ export interface SessionMetaWithScope extends SessionMeta {
 /**
  * Represents a session in a tree structure with child sessions.
  * Used for displaying hierarchical session relationships in the viewer.
- * 
+ *
  * Children are a flat list (SessionMeta[]) - not recursive (SessionTreeNode[]).
  * This design supports only one level of nesting (parent → children, no grandchildren).
  */
@@ -113,7 +121,9 @@ export function listSessions(options?: StoreOptions): SessionMeta[] {
     try {
       const stat = statSync(full);
       if (!stat.isDirectory()) continue;
-      const files = safeReaddir(full).filter((f) => f.endsWith(".json") && f !== "metadata.json");
+      const files = safeReaddir(full).filter(
+        (f) => f.endsWith(".json") && f !== "metadata.json",
+      );
       const hasRecords = files.length > 0;
 
       let title: string | undefined;
@@ -123,7 +133,11 @@ export function listSessions(options?: StoreOptions): SessionMeta[] {
       try {
         const metaPath = join(full, "metadata.json");
         const metaRaw = readFileSync(metaPath, "utf-8");
-        const meta = JSON.parse(metaRaw) as { title?: string; parentID?: string; folderPath?: string };
+        const meta = JSON.parse(metaRaw) as {
+          title?: string;
+          parentID?: string;
+          folderPath?: string;
+        };
         title = meta.title;
         parentID = meta.parentID;
         folderPath = meta.folderPath;
@@ -143,8 +157,10 @@ export function listSessions(options?: StoreOptions): SessionMeta[] {
         try {
           const raw = readFileSync(join(full, f), "utf-8");
           const rec: TraceRecord = JSON.parse(raw);
-          if (!createdAt || rec.requestAt < createdAt) createdAt = rec.requestAt;
-          if (!updatedAt || rec.responseAt > updatedAt) updatedAt = rec.responseAt;
+          if (!createdAt || rec.requestAt < createdAt)
+            createdAt = rec.requestAt;
+          if (!updatedAt || rec.responseAt > updatedAt)
+            updatedAt = rec.responseAt;
         } catch (err) {
           logger.error("Failed to read record file for session listing", {
             sessionDir: full,
@@ -172,8 +188,8 @@ export function listSessions(options?: StoreOptions): SessionMeta[] {
     }
   }
 
-  return sessions.sort(
-    (a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
+  return sessions.sort((a, b) =>
+    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
   );
 }
 
@@ -185,20 +201,20 @@ export function listSessionsTree(options?: StoreOptions): SessionTreeNode[] {
     if (!session.parentID) {
       const node: SessionTreeNode = {
         ...session,
-        children: sessions.filter(s => s.parentID === session.id)
+        children: sessions.filter((s) => s.parentID === session.id),
       };
       tree.push(node);
     }
   }
 
   return tree.sort((a, b) =>
-    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
+    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
   );
 }
 
 export function getSessionRecords(
   sessionId: string,
-  options?: StoreOptions
+  options?: StoreOptions,
 ): TraceRecord[] {
   const sessionDir = join(resolveDir(options), sessionId);
   if (!existsSync(sessionDir)) return [];
@@ -233,7 +249,7 @@ export function getSessionRecords(
 export function getRecord(
   sessionId: string,
   recordId: number,
-  options?: StoreOptions
+  options?: StoreOptions,
 ): TraceRecord | null {
   const filePath = join(resolveDir(options), sessionId, `${recordId}.json`);
   try {
@@ -254,7 +270,7 @@ export function getRecord(
 export function getSSEStream(
   sessionId: string,
   recordId: number,
-  options?: StoreOptions
+  options?: StoreOptions,
 ): string | null {
   const filePath = join(resolveDir(options), sessionId, `${recordId}.sse`);
   try {
@@ -278,7 +294,7 @@ export async function writeRecord(
   sessionId: string,
   seq: number,
   record: TraceRecord,
-  options?: StoreOptions
+  options?: StoreOptions,
 ): Promise<void> {
   const traceDir = resolveDir(options);
   const manager = await getManager(traceDir);
@@ -317,7 +333,7 @@ export interface ExportManifest {
 
 export function readSessionMetadata(
   sessionId: string,
-  traceDir: string
+  traceDir: string,
 ): SessionMetadataFile | null {
   const sessionDir = join(traceDir, sessionId);
   const metadataPath = join(sessionDir, "metadata.json");
@@ -345,7 +361,7 @@ export function readSessionMetadata(
 export function writeSessionMetadata(
   sessionId: string,
   metadata: SessionMetadataFile,
-  traceDir: string
+  traceDir: string,
 ): void {
   const sessionDir = join(traceDir, sessionId);
   if (!existsSync(sessionDir)) {
@@ -358,7 +374,7 @@ export function writeSessionMetadata(
 
 export async function exportSessionZip(
   sessionId: string,
-  options?: StoreOptions
+  options?: StoreOptions,
 ): Promise<Buffer> {
   const traceDir = resolveDir(options);
   const sessionDir = join(traceDir, sessionId);
@@ -372,10 +388,12 @@ export async function exportSessionZip(
 
   const allSessions = listSessions({ traceDir });
   const discoveredChildren = allSessions
-    .filter(s => s.parentID === sessionId)
-    .map(s => s.id);
+    .filter((s) => s.parentID === sessionId)
+    .map((s) => s.id);
 
-  const allSubSessions = [...new Set([...storedSubSessions, ...discoveredChildren])];
+  const allSubSessions = [
+    ...new Set([...storedSubSessions, ...discoveredChildren]),
+  ];
 
   const allSessionIds = [sessionId, ...allSubSessions];
 
@@ -383,7 +401,7 @@ export async function exportSessionZip(
     exportedAt: new Date().toISOString(),
     mainSession: sessionId,
     sessions: allSessionIds,
-    version: "1.0"
+    version: "1.0",
   };
 
   return new Promise<Buffer>((resolve, reject) => {
@@ -409,7 +427,9 @@ export async function exportSessionZip(
       }
     }
 
-    archive.append(JSON.stringify(manifest, null, 2), { name: "manifest.json" });
+    archive.append(JSON.stringify(manifest, null, 2), {
+      name: "manifest.json",
+    });
 
     archive.finalize();
   });
@@ -440,7 +460,7 @@ interface ImportOptions extends StoreOptions {
 
 export async function importSessionZip(
   zipBuffer: Buffer,
-  options?: ImportOptions
+  options?: ImportOptions,
 ): Promise<ImportResult> {
   const traceDir = resolveDir(options);
   const strategy = options?.conflictStrategy ?? "prompt";
@@ -466,33 +486,44 @@ export async function importSessionZip(
     throw new Error("Invalid export format: missing manifest.json");
   }
 
-  const manifest: ExportManifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+  const manifest: ExportManifest = JSON.parse(
+    readFileSync(manifestPath, "utf-8"),
+  );
 
   const conflicts: ConflictInfo[] = [];
   for (const sessionId of manifest.sessions) {
     const existingDir = join(traceDir, sessionId);
     if (existsSync(existingDir)) {
       const existingMeta = readSessionMetadata(sessionId, traceDir);
-      const importingMetaPath = join(tempDir, "sessions", sessionId, "metadata.json");
+      const importingMetaPath = join(
+        tempDir,
+        "sessions",
+        sessionId,
+        "metadata.json",
+      );
       const importingMeta = existsSync(importingMetaPath)
         ? JSON.parse(readFileSync(importingMetaPath, "utf-8"))
         : null;
 
-      const existingRecords = safeReaddir(existingDir).filter(f => f.endsWith(".json") && f !== "metadata.json");
+      const existingRecords = safeReaddir(existingDir).filter(
+        (f) => f.endsWith(".json") && f !== "metadata.json",
+      );
       const importingRecords = existsSync(join(tempDir, "sessions", sessionId))
-        ? safeReaddir(join(tempDir, "sessions", sessionId)).filter(f => f.endsWith(".json") && f !== "metadata.json")
+        ? safeReaddir(join(tempDir, "sessions", sessionId)).filter(
+            (f) => f.endsWith(".json") && f !== "metadata.json",
+          )
         : [];
 
       conflicts.push({
         sessionId,
         existing: {
           requestCount: existingRecords.length,
-          createdAt: existingMeta?.createdAt ?? ""
+          createdAt: existingMeta?.createdAt ?? "",
         },
         importing: {
           requestCount: importingRecords.length,
-          createdAt: importingMeta?.createdAt ?? ""
-        }
+          createdAt: importingMeta?.createdAt ?? "",
+        },
       });
     }
   }
@@ -532,13 +563,15 @@ export async function importSessionZip(
       writeFileSync(join(targetDir, file), readFileSync(join(sourceDir, file)));
     }
 
-    const importedRecords = safeReaddir(targetDir).filter(f => f.endsWith(".json") && f !== "metadata.json");
+    const importedRecords = safeReaddir(targetDir).filter(
+      (f) => f.endsWith(".json") && f !== "metadata.json",
+    );
 
     importedSessions.push({
       sessionId,
       requestCount: importedRecords.length,
       strategy: actualStrategy,
-      newId: actualStrategy === "rename" ? targetId : undefined
+      newId: actualStrategy === "rename" ? targetId : undefined,
     });
   }
 
@@ -549,7 +582,7 @@ export async function importSessionZip(
 
 export async function deleteSession(
   sessionId: string,
-  options?: StoreOptions
+  options?: StoreOptions,
 ): Promise<void> {
   const traceDir = resolveDir(options);
   const sessionDir = join(traceDir, sessionId);
@@ -563,10 +596,12 @@ export async function deleteSession(
 
   const allSessions = listSessions({ traceDir });
   const discoveredChildren = allSessions
-    .filter(s => s.parentID === sessionId)
-    .map(s => s.id);
+    .filter((s) => s.parentID === sessionId)
+    .map((s) => s.id);
 
-  const allSubSessions = [...new Set([...storedSubSessions, ...discoveredChildren])];
+  const allSubSessions = [
+    ...new Set([...storedSubSessions, ...discoveredChildren]),
+  ];
 
   for (const childId of allSubSessions) {
     const childDir = join(traceDir, childId);
@@ -580,8 +615,11 @@ export async function deleteSession(
 
 export async function deleteSessions(
   sessionIds: string[],
-  options?: StoreOptions
-): Promise<{ deleted: string[]; errors: { sessionId: string; error: string }[] }> {
+  options?: StoreOptions,
+): Promise<{
+  deleted: string[];
+  errors: { sessionId: string; error: string }[];
+}> {
   const deleted: string[] = [];
   const errors: { sessionId: string; error: string }[] = [];
 
@@ -597,16 +635,24 @@ export async function deleteSessions(
   return { deleted, errors };
 }
 
-export function listSessionsFromBothDirs(options: BothDirsOptions): SessionMetaWithScope[] {
+export function listSessionsFromBothDirs(
+  options: BothDirsOptions,
+): SessionMetaWithScope[] {
   const { globalDir, localDir } = options;
 
-  const globalSessions = listSessions({ traceDir: globalDir }).map(s => ({ ...s, scope: "global" as const }));
+  const globalSessions = listSessions({ traceDir: globalDir }).map((s) => ({
+    ...s,
+    scope: "global" as const,
+  }));
 
   if (!localDir) {
     return globalSessions;
   }
 
-  const localSessions = listSessions({ traceDir: localDir }).map(s => ({ ...s, scope: "local" as const }));
+  const localSessions = listSessions({ traceDir: localDir }).map((s) => ({
+    ...s,
+    scope: "local" as const,
+  }));
 
   const sessionMap = new Map<string, SessionMetaWithScope>();
 
@@ -618,18 +664,20 @@ export function listSessionsFromBothDirs(options: BothDirsOptions): SessionMetaW
     sessionMap.set(session.id, session);
   }
 
-  return Array.from(sessionMap.values()).sort(
-    (a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
+  return Array.from(sessionMap.values()).sort((a, b) =>
+    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
   );
 }
 
-export function listSessionsTreeFromBothDirs(options: BothDirsOptions): SessionTreeNodeWithScope[] {
+export function listSessionsTreeFromBothDirs(
+  options: BothDirsOptions,
+): SessionTreeNodeWithScope[] {
   const sessions = listSessionsFromBothDirs(options);
   const tree: SessionTreeNodeWithScope[] = [];
 
   for (const session of sessions) {
     if (!session.parentID) {
-      const children = sessions.filter(s => s.parentID === session.id);
+      const children = sessions.filter((s) => s.parentID === session.id);
       const node: SessionTreeNodeWithScope = {
         ...session,
         children,
@@ -639,6 +687,6 @@ export function listSessionsTreeFromBothDirs(options: BothDirsOptions): SessionT
   }
 
   return tree.sort((a, b) =>
-    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
+    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
   );
 }

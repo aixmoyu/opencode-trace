@@ -23,25 +23,48 @@ function buildTestApp() {
     return store.listSessionsTree();
   });
 
-  app.get<{ Params: { sessionId: string } }>("/api/sessions/:sessionId/timeline", async (req, reply) => {
-    const { sessionId } = req.params;
-    const records = store.getSessionRecords(sessionId);
-    const parsedRecords = records.map((rec) => {
-      const parsed = parse.detectAndParse(rec);
-      const provider = parse.detectProvider(rec.request.url, rec.request.body);
-      let requestMsgs = parsed.msgs;
-      if (provider === "openai-chat") {
-        requestMsgs = parse.openaiChatParser.parseRequest(rec.request.body).msgs;
-      } else if (provider === "openai-responses") {
-        requestMsgs = parse.openaiResponsesParser.parseRequest(rec.request.body).msgs;
-      } else if (provider === "anthropic") {
-        requestMsgs = parse.anthropicParser.parseRequest(rec.request.body).msgs;
-      }
-      return { id: rec.id, requestAt: rec.requestAt, requestMsgs, parsed };
-    }).filter((c) => c.parsed.provider !== "unknown" || c.parsed.msgs.length > 0);
-    const timeline = { messages: [], recordMeta: [] };
-    return { ...timeline, recordMeta: parsedRecords.map((r) => ({ id: r.id, model: r.parsed.model, provider: r.parsed.provider })) };
-  });
+  app.get<{ Params: { sessionId: string } }>(
+    "/api/sessions/:sessionId/timeline",
+    async (req, reply) => {
+      const { sessionId } = req.params;
+      const records = store.getSessionRecords(sessionId);
+      const parsedRecords = records
+        .map((rec) => {
+          const parsed = parse.detectAndParse(rec);
+          const provider = parse.detectProvider(
+            rec.request.url,
+            rec.request.body,
+          );
+          let requestMsgs = parsed.msgs;
+          if (provider === "openai-chat") {
+            requestMsgs = parse.openaiChatParser.parseRequest(
+              rec.request.body,
+            ).msgs;
+          } else if (provider === "openai-responses") {
+            requestMsgs = parse.openaiResponsesParser.parseRequest(
+              rec.request.body,
+            ).msgs;
+          } else if (provider === "anthropic") {
+            requestMsgs = parse.anthropicParser.parseRequest(
+              rec.request.body,
+            ).msgs;
+          }
+          return { id: rec.id, requestAt: rec.requestAt, requestMsgs, parsed };
+        })
+        .filter(
+          (c) => c.parsed.provider !== "unknown" || c.parsed.msgs.length > 0,
+        );
+      const timeline = { messages: [], recordMeta: [] };
+      return {
+        ...timeline,
+        recordMeta: parsedRecords.map((r) => ({
+          id: r.id,
+          model: r.parsed.model,
+          provider: r.parsed.provider,
+        })),
+      };
+    },
+  );
 
   app.get<{ Params: { sessionId: string; recordId: string } }>(
     "/api/sessions/:sessionId/records/:recordId/latency",
@@ -55,7 +78,7 @@ function buildTestApp() {
       }
       const latency = parse.extractLatency(rec);
       return latency ?? { error: "No latency data available" };
-    }
+    },
   );
 
   return app;
@@ -82,7 +105,12 @@ describe("Server API", () => {
         purpose: "",
         requestAt: "2026-04-29T00:00:00.000Z",
         responseAt: "2026-04-29T00:00:01.000Z",
-        request: { method: "POST", url: "https://example.com", headers: {}, body: null },
+        request: {
+          method: "POST",
+          url: "https://example.com",
+          headers: {},
+          body: null,
+        },
         response: null,
         error: null,
         requestSentAt: 1234567.89,

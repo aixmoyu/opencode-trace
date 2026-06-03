@@ -10,7 +10,10 @@
         <button
           v-if="toast.actionLabel"
           class="toast-action"
-          @click="toast.onAction?.(); removeToast(toast.id)"
+          @click="
+            toast.onAction?.();
+            removeToast(toast.id);
+          "
         >
           {{ toast.actionLabel }}
         </button>

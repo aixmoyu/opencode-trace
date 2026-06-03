@@ -6,12 +6,24 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
-import { store, parse, query, transform, record, getTraceDir } from "@opencode-trace/core";
+import {
+  store,
+  parse,
+  query,
+  transform,
+  record,
+  getTraceDir,
+} from "@opencode-trace/core";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function validateSessionId(sessionId: string): boolean {
-  return typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 256 && /^[a-zA-Z0-9_-]+$/.test(sessionId);
+  return (
+    typeof sessionId === "string" &&
+    sessionId.length > 0 &&
+    sessionId.length <= 256 &&
+    /^[a-zA-Z0-9_-]+$/.test(sessionId)
+  );
 }
 
 function validateRecordId(recordId: string): { valid: boolean; value: number } {
@@ -19,7 +31,11 @@ function validateRecordId(recordId: string): { valid: boolean; value: number } {
   return { valid: !isNaN(num) && num > 0 && num <= 999999, value: num };
 }
 
-function validateParams(reply: any, sessionId: string, recordId?: string): number | null {
+function validateParams(
+  reply: any,
+  sessionId: string,
+  recordId?: string,
+): number | null {
   if (!validateSessionId(sessionId)) {
     reply.code(400);
     reply.send({ error: "Invalid session ID format" });
@@ -51,7 +67,9 @@ export interface ViewerInstance {
   close: () => Promise<void>;
 }
 
-export async function createViewer(options?: ViewerOptions): Promise<ViewerInstance> {
+export async function createViewer(
+  options?: ViewerOptions,
+): Promise<ViewerInstance> {
   const port = options?.port ?? 3210;
   const globalDir = options?.globalDir ?? options?.traceDir ?? getTraceDir();
   const localDir = options?.localDir ?? options?.traceDir;
@@ -61,17 +79,24 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
     if (localDir) {
       const localMeta = store.readSessionMetadata(sessionId, localDir);
       if (localMeta) return localDir;
-      const localRecords = store.getSessionRecords(sessionId, { traceDir: localDir });
+      const localRecords = store.getSessionRecords(sessionId, {
+        traceDir: localDir,
+      });
       if (localRecords.length > 0) return localDir;
     }
     const globalMeta = store.readSessionMetadata(sessionId, globalDir);
     if (globalMeta) return globalDir;
-    const globalRecords = store.getSessionRecords(sessionId, { traceDir: globalDir });
+    const globalRecords = store.getSessionRecords(sessionId, {
+      traceDir: globalDir,
+    });
     if (globalRecords.length > 0) return globalDir;
     return null;
   }
 
-  function validateSessionAndFindDir(reply: any, sessionId: string): string | null {
+  function validateSessionAndFindDir(
+    reply: any,
+    sessionId: string,
+  ): string | null {
     if (!validateSessionId(sessionId)) {
       reply.code(400);
       reply.send({ error: "Invalid session ID format" });
@@ -109,7 +134,9 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
   app.setNotFoundHandler(async (_req, reply) => {
     const indexPath = join(publicDir, "index.html");
     if (existsSync(indexPath)) {
-      reply.type("text/html; charset=utf-8").send(readFileSync(indexPath, "utf-8"));
+      reply
+        .type("text/html; charset=utf-8")
+        .send(readFileSync(indexPath, "utf-8"));
     } else {
       reply.code(404).send({ error: "Not found" });
     }
@@ -125,93 +152,116 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
     return tree;
   });
 
-  app.get<{ Params: { sessionId: string } }>("/api/sessions/:sessionId/timeline", async (req, reply) => {
-    const { sessionId } = req.params;
-    if (!validateSessionId(sessionId)) {
-      reply.code(400);
-      return { error: "Invalid session ID format" };
-    }
-    const sessionTraceDir = findSessionTraceDir(sessionId);
-    if (!sessionTraceDir) {
-      reply.code(404);
-      return { error: "Session not found" };
-    }
-    const records = store.getSessionRecords(sessionId, { traceDir: sessionTraceDir });
-    const parsedRecords = records
-      .map((rec) => {
-        const parsed = parse.detectAndParse(rec);
-        const provider = parse.detectProvider(rec.request.url, rec.request.body);
-        let requestMsgs = parsed.msgs;
+  app.get<{ Params: { sessionId: string } }>(
+    "/api/sessions/:sessionId/timeline",
+    async (req, reply) => {
+      const { sessionId } = req.params;
+      if (!validateSessionId(sessionId)) {
+        reply.code(400);
+        return { error: "Invalid session ID format" };
+      }
+      const sessionTraceDir = findSessionTraceDir(sessionId);
+      if (!sessionTraceDir) {
+        reply.code(404);
+        return { error: "Session not found" };
+      }
+      const records = store.getSessionRecords(sessionId, {
+        traceDir: sessionTraceDir,
+      });
+      const parsedRecords = records
+        .map((rec) => {
+          const parsed = parse.detectAndParse(rec);
+          const provider = parse.detectProvider(
+            rec.request.url,
+            rec.request.body,
+          );
+          let requestMsgs = parsed.msgs;
 
-        if (provider === "openai-chat") {
-          const reqParsed = parse.openaiChatParser.parseRequest(rec.request.body);
-          requestMsgs = reqParsed.msgs;
-        } else if (provider === "openai-responses") {
-          const reqParsed = parse.openaiResponsesParser.parseRequest(rec.request.body);
-          requestMsgs = reqParsed.msgs;
-        } else if (provider === "anthropic") {
-          const reqParsed = parse.anthropicParser.parseRequest(rec.request.body);
-          requestMsgs = reqParsed.msgs;
-        }
+          if (provider === "openai-chat") {
+            const reqParsed = parse.openaiChatParser.parseRequest(
+              rec.request.body,
+            );
+            requestMsgs = reqParsed.msgs;
+          } else if (provider === "openai-responses") {
+            const reqParsed = parse.openaiResponsesParser.parseRequest(
+              rec.request.body,
+            );
+            requestMsgs = reqParsed.msgs;
+          } else if (provider === "anthropic") {
+            const reqParsed = parse.anthropicParser.parseRequest(
+              rec.request.body,
+            );
+            requestMsgs = reqParsed.msgs;
+          }
 
-        return {
+          return {
+            id: rec.id,
+            requestAt: rec.requestAt,
+            requestMsgs,
+            parsed,
+          };
+        })
+        .filter(
+          (c) => c.parsed.provider !== "unknown" || c.parsed.msgs.length > 0,
+        );
+      const timeline = query.buildSessionTimeline(sessionId, parsedRecords);
+      const recordMeta = parsedRecords.map((r) => ({
+        id: r.id,
+        model: r.parsed.model,
+        provider: r.parsed.provider,
+      }));
+      return { ...timeline, recordMeta };
+    },
+  );
+
+  app.get<{ Params: { sessionId: string } }>(
+    "/api/sessions/:sessionId/metadata",
+    async (req, reply) => {
+      const { sessionId } = req.params;
+      if (!validateSessionId(sessionId)) {
+        reply.code(400);
+        return { error: "Invalid session ID format" };
+      }
+      const sessionTraceDir = findSessionTraceDir(sessionId);
+      if (!sessionTraceDir) {
+        reply.code(404);
+        return { error: "Session not found" };
+      }
+      const records = store.getSessionRecords(sessionId, {
+        traceDir: sessionTraceDir,
+      });
+      const parsedRecords = records
+        .map((rec) => ({
           id: rec.id,
-          requestAt: rec.requestAt,
-          requestMsgs,
-          parsed,
-        };
-      })
-      .filter((c) => c.parsed.provider !== "unknown" || c.parsed.msgs.length > 0);
-    const timeline = query.buildSessionTimeline(sessionId, parsedRecords);
-    const recordMeta = parsedRecords.map((r) => ({
-      id: r.id,
-      model: r.parsed.model,
-      provider: r.parsed.provider,
-    }));
-    return { ...timeline, recordMeta };
-  });
+          record: rec,
+          parsed: parse.detectAndParse(rec),
+        }))
+        .filter(
+          (c) => c.parsed.provider !== "unknown" || c.parsed.msgs.length > 0,
+        );
 
-  app.get<{ Params: { sessionId: string } }>("/api/sessions/:sessionId/metadata", async (req, reply) => {
-    const { sessionId } = req.params;
-    if (!validateSessionId(sessionId)) {
-      reply.code(400);
-      return { error: "Invalid session ID format" };
-    }
-    const sessionTraceDir = findSessionTraceDir(sessionId);
-    if (!sessionTraceDir) {
-      reply.code(404);
-      return { error: "Session not found" };
-    }
-    const records = store.getSessionRecords(sessionId, { traceDir: sessionTraceDir });
-    const parsedRecords = records
-      .map((rec) => ({
-        id: rec.id,
-        record: rec,
-        parsed: parse.detectAndParse(rec),
-      }))
-      .filter((c) => c.parsed.provider !== "unknown" || c.parsed.msgs.length > 0);
+      const sessions = store.listSessionsFromBothDirs(bothDirsOpts);
+      const sessionMeta = sessions.find((s) => s.id === sessionId);
 
-    const sessions = store.listSessionsFromBothDirs(bothDirsOpts);
-    const sessionMeta = sessions.find((s) => s.id === sessionId);
+      const tree = store.listSessionsTreeFromBothDirs(bothDirsOpts);
+      const node = tree.find((n) => n.id === sessionId);
 
-    const tree = store.listSessionsTreeFromBothDirs(bothDirsOpts);
-    const node = tree.find((n) => n.id === sessionId);
+      const metadata = query.buildSessionMetadata(
+        sessionId,
+        parsedRecords,
+        sessionMeta?.folderPath,
+      );
 
-    const metadata = query.buildSessionMetadata(
-      sessionId,
-      parsedRecords,
-      sessionMeta?.folderPath
-    );
+      if (sessionMeta) {
+        metadata.createdAt = sessionMeta.createdAt;
+        metadata.updatedAt = sessionMeta.updatedAt;
+        metadata.subSessions = node?.children?.map((c) => c.id) ?? [];
+        metadata.parentSession = sessionMeta.parentID ?? null;
+      }
 
-    if (sessionMeta) {
-      metadata.createdAt = sessionMeta.createdAt;
-      metadata.updatedAt = sessionMeta.updatedAt;
-      metadata.subSessions = node?.children?.map(c => c.id) ?? [];
-      metadata.parentSession = sessionMeta.parentID ?? null;
-    }
-
-    return metadata;
-  });
+      return metadata;
+    },
+  );
 
   app.get<{ Params: { sessionId: string; recordId: string } }>(
     "/api/sessions/:sessionId/records/:recordId/parsed",
@@ -221,14 +271,16 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       if (rid === null) return;
       const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
       if (sessionTraceDir === null) return;
-      const rec = store.getRecord(sessionId, rid, { traceDir: sessionTraceDir });
+      const rec = store.getRecord(sessionId, rid, {
+        traceDir: sessionTraceDir,
+      });
       if (!rec) {
         reply.code(404);
         return { error: "Record not found" };
       }
       const parsed = parse.detectAndParse(rec);
       return parsed;
-    }
+    },
   );
 
   app.get<{ Params: { sessionId: string; recordId: string } }>(
@@ -239,14 +291,16 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       if (rid === null) return;
       const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
       if (sessionTraceDir === null) return;
-      const rec = store.getRecord(sessionId, rid, { traceDir: sessionTraceDir });
+      const rec = store.getRecord(sessionId, rid, {
+        traceDir: sessionTraceDir,
+      });
       if (!rec) {
         reply.code(404);
         return { error: "Record not found" };
       }
       const usage = parse.extractUsage(rec);
       return usage;
-    }
+    },
   );
 
   app.get<{ Params: { sessionId: string; recordId: string } }>(
@@ -257,14 +311,16 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       if (rid === null) return;
       const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
       if (sessionTraceDir === null) return;
-      const rec = store.getRecord(sessionId, rid, { traceDir: sessionTraceDir });
+      const rec = store.getRecord(sessionId, rid, {
+        traceDir: sessionTraceDir,
+      });
       if (!rec) {
         reply.code(404);
         return { error: "Record not found" };
       }
       const latency = parse.extractLatency(rec);
       return latency ?? { error: "No latency data available" };
-    }
+    },
   );
 
   app.get<{ Params: { sessionId: string; recordId: string } }>(
@@ -275,12 +331,16 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       if (rid === null) return;
       const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
       if (sessionTraceDir === null) return;
-      const sseData = store.getSSEStream(sessionId, rid, { traceDir: sessionTraceDir });
+      const sseData = store.getSSEStream(sessionId, rid, {
+        traceDir: sessionTraceDir,
+      });
       if (!sseData) {
         reply.code(404);
         return { error: "No SSE data found" };
       }
-      const rec = store.getRecord(sessionId, rid, { traceDir: sessionTraceDir });
+      const rec = store.getRecord(sessionId, rid, {
+        traceDir: sessionTraceDir,
+      });
       const provider = rec?.request
         ? parse.detectProvider(rec.request.url, rec.request.body)
         : null;
@@ -293,7 +353,7 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
         messages = transform.sseOpenaiChatToMessages(sseData);
       }
       return { raw: sseData, messages };
-    }
+    },
   );
 
   app.get<{ Params: { sessionId: string; recordId: string } }>(
@@ -304,43 +364,50 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       if (rid === null) return;
       const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
       if (sessionTraceDir === null) return;
-      const rec = store.getRecord(sessionId, rid, { traceDir: sessionTraceDir });
+      const rec = store.getRecord(sessionId, rid, {
+        traceDir: sessionTraceDir,
+      });
       if (!rec) {
         reply.code(404);
         return { error: "Record not found" };
       }
       return rec;
-    }
+    },
   );
 
-  app.get<{ Params: { sessionId: string } }>("/api/sessions/:sessionId", async (req, reply) => {
-    const { sessionId } = req.params;
-    if (!validateSessionId(sessionId)) {
-      reply.code(400);
-      return { error: "Invalid session ID format" };
-    }
-    const sessionTraceDir = findSessionTraceDir(sessionId);
-    const sessions = store.listSessionsFromBothDirs(bothDirsOpts);
-    const sessionMeta = sessions.find((s) => s.id === sessionId);
-    const records = sessionTraceDir ? store.getSessionRecords(sessionId, { traceDir: sessionTraceDir }) : [];
-    const enriched = records.map((rec) => ({
-      ...rec,
-      provider: rec?.request
-        ? parse.detectProvider(rec.request.url, rec.request.body)
-        : null,
-    }));
-    return {
-      session:
-        sessionMeta ??
-        ({
-          id: sessionId,
-          requestCount: records.length,
-          createdAt: null,
-          updatedAt: null,
-        } as store.SessionMeta),
-      records: enriched,
-    };
-  });
+  app.get<{ Params: { sessionId: string } }>(
+    "/api/sessions/:sessionId",
+    async (req, reply) => {
+      const { sessionId } = req.params;
+      if (!validateSessionId(sessionId)) {
+        reply.code(400);
+        return { error: "Invalid session ID format" };
+      }
+      const sessionTraceDir = findSessionTraceDir(sessionId);
+      const sessions = store.listSessionsFromBothDirs(bothDirsOpts);
+      const sessionMeta = sessions.find((s) => s.id === sessionId);
+      const records = sessionTraceDir
+        ? store.getSessionRecords(sessionId, { traceDir: sessionTraceDir })
+        : [];
+      const enriched = records.map((rec) => ({
+        ...rec,
+        provider: rec?.request
+          ? parse.detectProvider(rec.request.url, rec.request.body)
+          : null,
+      }));
+      return {
+        session:
+          sessionMeta ??
+          ({
+            id: sessionId,
+            requestCount: records.length,
+            createdAt: null,
+            updatedAt: null,
+          } as store.SessionMeta),
+        records: enriched,
+      };
+    },
+  );
 
   app.get("/api/trace/status", async (_req, reply) => {
     const enabled = record.getGlobalTraceEnabled(globalDir);
@@ -361,34 +428,42 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
     return { traceDir: globalDir, localDir };
   });
 
-  app.post<{ Params: { sessionId: string } }>("/api/sessions/:sessionId/export", async (req, reply) => {
-    try {
-      const { sessionId } = req.params;
-      if (!validateSessionId(sessionId)) {
-        reply.code(400);
-        return { error: "Invalid session ID format" };
-      }
-      const sessionTraceDir = findSessionTraceDir(sessionId);
-      if (!sessionTraceDir) {
-        reply.code(404);
-        return { error: "Session not found" };
-      }
-      const buffer = await store.exportSessionZip(sessionId, { traceDir: sessionTraceDir });
+  app.post<{ Params: { sessionId: string } }>(
+    "/api/sessions/:sessionId/export",
+    async (req, reply) => {
+      try {
+        const { sessionId } = req.params;
+        if (!validateSessionId(sessionId)) {
+          reply.code(400);
+          return { error: "Invalid session ID format" };
+        }
+        const sessionTraceDir = findSessionTraceDir(sessionId);
+        if (!sessionTraceDir) {
+          reply.code(404);
+          return { error: "Session not found" };
+        }
+        const buffer = await store.exportSessionZip(sessionId, {
+          traceDir: sessionTraceDir,
+        });
 
-      reply
-        .type("application/zip")
-        .header("Content-Disposition", `attachment; filename="session-${sessionId}.zip"`)
-        .send(buffer);
-    } catch (e) {
-      const err = e as Error;
-      if (err.message === "Session not found") {
-        reply.code(404);
-        return { error: "Session not found" };
+        reply
+          .type("application/zip")
+          .header(
+            "Content-Disposition",
+            `attachment; filename="session-${sessionId}.zip"`,
+          )
+          .send(buffer);
+      } catch (e) {
+        const err = e as Error;
+        if (err.message === "Session not found") {
+          reply.code(404);
+          return { error: "Session not found" };
+        }
+        reply.code(500);
+        return { error: "Export failed: " + err.message };
       }
-      reply.code(500);
-      return { error: "Export failed: " + err.message };
-    }
-  });
+    },
+  );
 
   app.post("/api/sessions/import", async (req, reply) => {
     try {
@@ -399,17 +474,24 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
       }
 
       const fileBuffer = await data.toBuffer();
-      const conflictStrategy = (data.fields.conflictStrategy as { value: string })?.value ?? "prompt";
+      const conflictStrategy =
+        (data.fields.conflictStrategy as { value: string })?.value ?? "prompt";
 
       const validStrategies = ["prompt", "rename", "skip", "overwrite"];
       if (!validStrategies.includes(conflictStrategy)) {
         reply.code(400);
-        return { error: `Invalid conflict strategy: ${conflictStrategy}. Valid: ${validStrategies.join(", ")}` };
+        return {
+          error: `Invalid conflict strategy: ${conflictStrategy}. Valid: ${validStrategies.join(", ")}`,
+        };
       }
 
       const result = await store.importSessionZip(fileBuffer, {
         traceDir: globalDir,
-        conflictStrategy: conflictStrategy as "prompt" | "rename" | "skip" | "overwrite",
+        conflictStrategy: conflictStrategy as
+          | "prompt"
+          | "rename"
+          | "skip"
+          | "overwrite",
       });
 
       return result;
@@ -424,31 +506,38 @@ export async function createViewer(options?: ViewerOptions): Promise<ViewerInsta
     }
   });
 
-  app.post<{ Params: { sessionId: string } }>("/api/sessions/:sessionId/delete", async (req, reply) => {
-    try {
-      const { sessionId } = req.params;
-      if (!validateSessionId(sessionId)) {
-        reply.code(400);
-        return { error: "Invalid session ID format" };
+  app.post<{ Params: { sessionId: string } }>(
+    "/api/sessions/:sessionId/delete",
+    async (req, reply) => {
+      try {
+        const { sessionId } = req.params;
+        if (!validateSessionId(sessionId)) {
+          reply.code(400);
+          return { error: "Invalid session ID format" };
+        }
+        const sessionTraceDir = findSessionTraceDir(sessionId);
+        if (!sessionTraceDir) {
+          reply.code(404);
+          return { error: "Session not found" };
+        }
+        await store.deleteSession(sessionId, { traceDir: sessionTraceDir });
+        return { success: true, sessionId };
+      } catch (e) {
+        const err = e as Error;
+        reply.code(500);
+        return { error: "Delete failed: " + err.message };
       }
-      const sessionTraceDir = findSessionTraceDir(sessionId);
-      if (!sessionTraceDir) {
-        reply.code(404);
-        return { error: "Session not found" };
-      }
-      await store.deleteSession(sessionId, { traceDir: sessionTraceDir });
-      return { success: true, sessionId };
-    } catch (e) {
-      const err = e as Error;
-      reply.code(500);
-      return { error: "Delete failed: " + err.message };
-    }
-  });
+    },
+  );
 
   app.post("/api/sessions/batch-delete", async (req, reply) => {
     try {
       const body = req.body as { sessionIds?: string[] };
-      if (!body || !Array.isArray(body.sessionIds) || body.sessionIds.length === 0) {
+      if (
+        !body ||
+        !Array.isArray(body.sessionIds) ||
+        body.sessionIds.length === 0
+      ) {
         reply.code(400);
         return { error: "sessionIds must be a non-empty array" };
       }

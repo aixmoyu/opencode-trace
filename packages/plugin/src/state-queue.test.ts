@@ -33,7 +33,12 @@ describe("AsyncStateQueue", () => {
       purpose: "test",
       requestAt: "2026-05-07T00:00:00Z",
       responseAt: "2026-05-07T00:00:01Z",
-      request: { method: "GET", url: "https://example.com", headers: {}, body: null },
+      request: {
+        method: "GET",
+        url: "https://example.com",
+        headers: {},
+        body: null,
+      },
       response: { status: 200, statusText: "OK", headers: {}, body: null },
       error: null,
     };
@@ -55,7 +60,12 @@ describe("AsyncStateQueue", () => {
       purpose: `test-${i}`,
       requestAt: new Date().toISOString(),
       responseAt: new Date().toISOString(),
-      request: { method: "GET", url: `https://example.com/${i}`, headers: {}, body: null },
+      request: {
+        method: "GET",
+        url: `https://example.com/${i}`,
+        headers: {},
+        body: null,
+      },
       response: { status: 200, statusText: "OK", headers: {}, body: null },
       error: null,
     }));
@@ -74,19 +84,26 @@ describe("AsyncStateQueue", () => {
     const sessionId = "error-test";
     stateManager.startSession(sessionId);
 
-    const loggerErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => logger);
+    const loggerErrorSpy = vi
+      .spyOn(logger, "error")
+      .mockImplementation(() => logger);
 
     const record = {
       id: 1,
       purpose: "test",
       requestAt: new Date().toISOString(),
       responseAt: new Date().toISOString(),
-      request: { method: "GET", url: "https://example.com", headers: {}, body: null },
+      request: {
+        method: "GET",
+        url: "https://example.com",
+        headers: {},
+        body: null,
+      },
       response: { status: 200, statusText: "OK", headers: {}, body: null },
       error: null,
     };
 
-    vi.spyOn(stateManager, 'writeRecord').mockImplementationOnce(() => {
+    vi.spyOn(stateManager, "writeRecord").mockImplementationOnce(() => {
       throw new Error("Test error");
     });
 
@@ -94,10 +111,9 @@ describe("AsyncStateQueue", () => {
 
     await queue.flush();
 
-    expect(loggerErrorSpy).toHaveBeenCalledWith(
-      "SQLite update failed",
-      { error: "Error: Test error" }
-    );
+    expect(loggerErrorSpy).toHaveBeenCalledWith("SQLite update failed", {
+      error: "Error: Test error",
+    });
 
     loggerErrorSpy.mockRestore();
     vi.restoreAllMocks();
@@ -113,7 +129,12 @@ describe("AsyncStateQueue", () => {
         purpose: `test-${i}`,
         requestAt: new Date().toISOString(),
         responseAt: new Date().toISOString(),
-        request: { method: "GET", url: "https://example.com", headers: {}, body: null },
+        request: {
+          method: "GET",
+          url: "https://example.com",
+          headers: {},
+          body: null,
+        },
         response: { status: 200, statusText: "OK", headers: {}, body: null },
         error: null,
       });

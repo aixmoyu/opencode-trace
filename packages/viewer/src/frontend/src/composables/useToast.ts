@@ -17,7 +17,7 @@ export function useToast() {
     type: Toast["type"] = "info",
     onAction?: () => void,
     actionLabel?: string,
-    duration = 3000
+    duration = 3000,
   ) {
     const id = nextId++;
     const toast: Toast = { id, message, type, actionLabel, onAction };

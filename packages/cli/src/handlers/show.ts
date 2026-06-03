@@ -1,5 +1,10 @@
 import { store, parse, query, record } from "@opencode-trace/core";
-import { parseFlags, parseRange, inRange, findSessionTraceDir } from "../utils.js";
+import {
+  parseFlags,
+  parseRange,
+  inRange,
+  findSessionTraceDir,
+} from "../utils.js";
 import { outputData } from "../formatter.js";
 
 export async function cmdShow(args: string[]): Promise<void> {

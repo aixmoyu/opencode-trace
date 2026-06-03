@@ -10,7 +10,12 @@ describe("extractLatency", () => {
       purpose: "",
       requestAt: "2026-04-29T00:00:00.000Z",
       responseAt: "2026-04-29T00:00:01.000Z",
-      request: { method: "POST", url: "https://example.com", headers: {}, body: null },
+      request: {
+        method: "POST",
+        url: "https://example.com",
+        headers: {},
+        body: null,
+      },
       response: null,
       error: null,
       requestSentAt: 1234567.89,
@@ -29,7 +34,12 @@ describe("extractLatency", () => {
       purpose: "",
       requestAt: "2026-04-29T00:00:00.000Z",
       responseAt: "2026-04-29T00:00:01.000Z",
-      request: { method: "POST", url: "https://example.com", headers: {}, body: null },
+      request: {
+        method: "POST",
+        url: "https://example.com",
+        headers: {},
+        body: null,
+      },
       response: null,
       error: null,
     };
@@ -66,7 +76,7 @@ describe("extractLatency", () => {
     };
 
     const latency = extractLatency(record);
-    expect(latency?.tpot).toBeCloseTo(0.20, 2); // (90.34 - 70.12) / 100 = 0.2022
+    expect(latency?.tpot).toBeCloseTo(0.2, 2); // (90.34 - 70.12) / 100 = 0.2022
   });
 
   it("should return null TPOT when response has no usage", () => {

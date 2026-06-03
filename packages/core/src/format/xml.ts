@@ -1,5 +1,10 @@
 import type { Conversation, Entry, Block } from "../parse/types.js";
-import type { SessionTimeline, RequestChange, Delta, EntryDelta } from "../query/types.js";
+import type {
+  SessionTimeline,
+  RequestChange,
+  Delta,
+  EntryDelta,
+} from "../query/types.js";
 
 export function escapeXML(str: string): string {
   return str
@@ -10,40 +15,49 @@ export function escapeXML(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function conversationBodyToXML(conv: Conversation, baseIndent: string): string[] {
+function conversationBodyToXML(
+  conv: Conversation,
+  baseIndent: string,
+): string[] {
   const lines: string[] = [];
   lines.push(`${baseIndent}<provider>${escapeXML(conv.provider)}</provider>`);
-  
+
   if (conv.model) {
     lines.push(`${baseIndent}<model>${escapeXML(conv.model)}</model>`);
   }
-  
+
   if (conv.sys) {
     lines.push(`${baseIndent}<sys>`);
     lines.push(entryToXML(conv.sys, `${baseIndent}  `));
     lines.push(`${baseIndent}</sys>`);
   }
-  
+
   if (conv.tool) {
     lines.push(`${baseIndent}<tool>`);
     lines.push(entryToXML(conv.tool, `${baseIndent}  `));
     lines.push(`${baseIndent}</tool>`);
   }
-  
+
   lines.push(`${baseIndent}<msgs>`);
   for (const msg of conv.msgs) {
     lines.push(entryToXML(msg, `${baseIndent}  `));
   }
   lines.push(`${baseIndent}</msgs>`);
-  
+
   if (conv.usage) {
     lines.push(`${baseIndent}<usage>`);
-    lines.push(`${baseIndent}  <inputMissTokens>${conv.usage.inputMissTokens ?? 0}</inputMissTokens>`);
-    lines.push(`${baseIndent}  <inputHitTokens>${conv.usage.inputHitTokens ?? 0}</inputHitTokens>`);
-    lines.push(`${baseIndent}  <outputTokens>${conv.usage.outputTokens ?? 0}</outputTokens>`);
+    lines.push(
+      `${baseIndent}  <inputMissTokens>${conv.usage.inputMissTokens ?? 0}</inputMissTokens>`,
+    );
+    lines.push(
+      `${baseIndent}  <inputHitTokens>${conv.usage.inputHitTokens ?? 0}</inputHitTokens>`,
+    );
+    lines.push(
+      `${baseIndent}  <outputTokens>${conv.usage.outputTokens ?? 0}</outputTokens>`,
+    );
     lines.push(`${baseIndent}</usage>`);
   }
-  
+
   return lines;
 }
 
@@ -70,7 +84,9 @@ export function blockToXML(block: Block, indent: string): string {
 
 export function entryToXML(entry: Entry, indent: string): string {
   const lines: string[] = [];
-  const attrs = entry.role ? ` id="${escapeXML(entry.id)}" role="${entry.role}"` : ` id="${escapeXML(entry.id)}"`;
+  const attrs = entry.role
+    ? ` id="${escapeXML(entry.id)}" role="${entry.role}"`
+    : ` id="${escapeXML(entry.id)}"`;
   lines.push(`${indent}<entry${attrs}>`);
   lines.push(`${indent}  <blocks>`);
   for (const block of entry.blocks) {
@@ -91,7 +107,7 @@ export function conversationToXML(conv: Conversation): string {
 export function entryDeltaToXML(delta: EntryDelta, indent: string): string {
   const lines: string[] = [];
   lines.push(`${indent}<entryDelta id="${escapeXML(delta.id)}">`);
-  
+
   if (delta.added && delta.added.length > 0) {
     lines.push(`${indent}  <added>`);
     for (const block of delta.added) {
@@ -99,7 +115,7 @@ export function entryDeltaToXML(delta: EntryDelta, indent: string): string {
     }
     lines.push(`${indent}  </added>`);
   }
-  
+
   if (delta.removed && delta.removed.length > 0) {
     lines.push(`${indent}  <removed>`);
     for (const block of delta.removed) {
@@ -107,7 +123,7 @@ export function entryDeltaToXML(delta: EntryDelta, indent: string): string {
     }
     lines.push(`${indent}  </removed>`);
   }
-  
+
   lines.push(`${indent}</entryDelta>`);
   return lines.join("\n");
 }
@@ -115,25 +131,25 @@ export function entryDeltaToXML(delta: EntryDelta, indent: string): string {
 function deltaToXML(delta: Delta, indent: string): string {
   const lines: string[] = [];
   lines.push(`${indent}<delta>`);
-  
+
   if (delta.sys) {
     lines.push(`${indent}  <sys>`);
     lines.push(entryDeltaToXML(delta.sys, `${indent}    `));
     lines.push(`${indent}  </sys>`);
   }
-  
+
   if (delta.tool) {
     lines.push(`${indent}  <tool>`);
     lines.push(entryDeltaToXML(delta.tool, `${indent}    `));
     lines.push(`${indent}  </tool>`);
   }
-  
+
   lines.push(`${indent}  <msgs>`);
   for (const msgDelta of delta.msgs) {
     lines.push(entryDeltaToXML(msgDelta, `${indent}    `));
   }
   lines.push(`${indent}  </msgs>`);
-  
+
   lines.push(`${indent}</delta>`);
   return lines.join("\n");
 }
@@ -144,27 +160,29 @@ export function timelineToXML(timeline: SessionTimeline): string {
   lines.push(`  <sessionId>${escapeXML(timeline.sessionId)}</sessionId>`);
   lines.push(`  <totalRequests>${timeline.totalRequests}</totalRequests>`);
   lines.push("  <changes>");
-  
+
   for (const change of timeline.changes) {
     lines.push(`    <change requestId="${change.requestId}">`);
     lines.push(deltaToXML(change.delta, "      "));
     lines.push(`    </change>`);
   }
-  
+
   lines.push("  </changes>");
   lines.push("</timeline>");
   return lines.join("\n");
 }
 
-export function conversationsMapToXML(map: Record<number, Conversation>): string {
+export function conversationsMapToXML(
+  map: Record<number, Conversation>,
+): string {
   const lines: string[] = ["<conversations>"];
-  
+
   for (const [reqId, conv] of Object.entries(map)) {
     lines.push(`  <conversation reqId="${reqId}">`);
     lines.push(...conversationBodyToXML(conv, "    "));
     lines.push("  </conversation>");
   }
-  
+
   lines.push("</conversations>");
   return lines.join("\n");
 }
@@ -172,13 +190,13 @@ export function conversationsMapToXML(map: Record<number, Conversation>): string
 export function deltasMapToXML(map: Record<number, Delta>): string {
   const lines: string[] = [];
   lines.push("<deltas>");
-  
+
   for (const [reqId, delta] of Object.entries(map)) {
     lines.push(`  <delta reqId="${reqId}">`);
     lines.push(deltaToXML(delta as Delta, "    "));
     lines.push("  </delta>");
   }
-  
+
   lines.push("</deltas>");
   return lines.join("\n");
 }

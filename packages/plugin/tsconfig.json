@@ -4,7 +4,8 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "composite": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "lib": ["ES2024"]
   },
   "references": [{ "path": "../core" }],
   "include": ["src/**/*"],

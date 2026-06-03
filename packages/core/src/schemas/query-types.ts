@@ -64,9 +64,11 @@ export const TimelineRecordSchema = z.object({
   id: z.number().int().positive(),
   requestAt: z.string().optional(),
   requestMsgs: z.array(EntrySchema).optional(),
-  parsed: z.object({
-    provider: z.string(),
-    model: z.string().nullable(),
-    msgs: z.array(EntrySchema),
-  }).passthrough(),
+  parsed: z
+    .object({
+      provider: z.string(),
+      model: z.string().nullable(),
+      msgs: z.array(EntrySchema),
+    })
+    .passthrough(),
 });

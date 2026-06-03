@@ -1,6 +1,12 @@
 <template>
   <a href="#main-content" class="skip-link">Skip to content</a>
-  <div id="a11y-live-region" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div
+    id="a11y-live-region"
+    class="sr-only"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+  ></div>
 
   <AppHeader
     :trace-enabled="traceEnabled"
@@ -31,10 +37,7 @@
     @cancel="confirmState = null"
   />
 
-  <KeyboardHelp
-    v-if="showKeyboardHelp"
-    @close="showKeyboardHelp = false"
-  />
+  <KeyboardHelp v-if="showKeyboardHelp" @close="showKeyboardHelp = false" />
 
   <ImportModal
     v-if="showImportModal"
@@ -101,7 +104,10 @@ async function toggleTraceEnabled() {
   try {
     await api(`trace/${isOn ? "disable" : "enable"}`);
     traceEnabled.value = !isOn;
-    showToast(`Trace ${traceEnabled.value ? "enabled" : "disabled"}`, "success");
+    showToast(
+      `Trace ${traceEnabled.value ? "enabled" : "disabled"}`,
+      "success",
+    );
   } catch (e) {
     console.error("Failed to toggle trace:", e);
   }
@@ -117,7 +123,10 @@ function handleExport() {
 async function exportSession(sessionId: string) {
   try {
     showToast("Exporting session...", "info");
-    const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/export`, { method: "POST" });
+    const res = await fetch(
+      `/api/sessions/${encodeURIComponent(sessionId)}/export`,
+      { method: "POST" },
+    );
     if (!res.ok) throw new Error(`Export failed: ${res.status}`);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -143,19 +152,21 @@ function onImported() {
 
 useKeyboard({
   "/": () => {
-    const input = document.querySelector<HTMLInputElement>("#session-search, .search-input");
+    const input = document.querySelector<HTMLInputElement>(
+      "#session-search, .search-input",
+    );
     input?.focus();
   },
   "?": () => {
     showKeyboardHelp.value = true;
   },
-  "e": () => {
+  e: () => {
     const route = router.currentRoute.value;
     if (route.name === "timeline" && route.params.sessionId) {
       exportSession(route.params.sessionId as string);
     }
   },
-  "Escape": () => {
+  Escape: () => {
     showKeyboardHelp.value = false;
     showImportModal.value = false;
     confirmState.value = null;

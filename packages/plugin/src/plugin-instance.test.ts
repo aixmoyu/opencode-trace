@@ -4,7 +4,10 @@ import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 
-async function waitForFile(filePath: string, timeoutMs: number = 5000): Promise<void> {
+async function waitForFile(
+  filePath: string,
+  timeoutMs: number = 5000,
+): Promise<void> {
   const startTime = Date.now();
   while (true) {
     if (existsSync(filePath)) {
@@ -14,13 +17,14 @@ async function waitForFile(filePath: string, timeoutMs: number = 5000): Promise<
           JSON.parse(content);
           return;
         }
-      } catch {
-      }
+      } catch {}
     }
     if (Date.now() - startTime > timeoutMs) {
-      throw new Error(`Timeout waiting for valid file ${filePath} after ${timeoutMs}ms`);
+      throw new Error(
+        `Timeout waiting for valid file ${filePath} after ${timeoutMs}ms`,
+      );
     }
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
   }
 }
 
@@ -30,7 +34,7 @@ describe("TracePlugin", () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "plugin-test-"));
-    plugin = new TracePlugin(tempDir, tempDir);
+    plugin = new TracePlugin({ globalDir: tempDir, localDir: tempDir });
   });
 
   afterEach(() => {
@@ -47,7 +51,7 @@ describe("TracePlugin", () => {
   test("installInterceptor installs traced fetch", () => {
     const originalFetch = globalThis.fetch;
     plugin.installInterceptor();
-    
+
     expect(globalThis.fetch).not.toBe(originalFetch);
   });
 
@@ -55,7 +59,7 @@ describe("TracePlugin", () => {
     const originalFetch = globalThis.fetch;
     plugin.installInterceptor();
     plugin.uninstallInterceptor();
-    
+
     expect(globalThis.fetch).toBe(originalFetch);
   });
 
@@ -63,10 +67,10 @@ describe("TracePlugin", () => {
     const originalFetch = globalThis.fetch;
     plugin.installInterceptor();
     const firstInterceptor = globalThis.fetch;
-    
+
     plugin.installInterceptor(); // Should not change
     expect(globalThis.fetch).toBe(firstInterceptor);
-    
+
     plugin.uninstallInterceptor();
     expect(globalThis.fetch).toBe(originalFetch);
   });
@@ -74,7 +78,7 @@ describe("TracePlugin", () => {
   test("uninstallInterceptor is safe when not installed", () => {
     const originalFetch = globalThis.fetch;
     plugin.uninstallInterceptor(); // Should not throw or change
-    
+
     expect(globalThis.fetch).toBe(originalFetch);
   });
 
@@ -82,10 +86,10 @@ describe("TracePlugin", () => {
     const originalFetch = globalThis.fetch;
     plugin.installInterceptor();
     plugin.uninstallInterceptor();
-    
+
     plugin.installInterceptor(); // Should work again
     expect(globalThis.fetch).not.toBe(originalFetch);
-    
+
     plugin.uninstallInterceptor();
     expect(globalThis.fetch).toBe(originalFetch);
   });
@@ -93,27 +97,27 @@ describe("TracePlugin", () => {
   test("tracedFetch writes records via writeQueue", async () => {
     // Mock fetch BEFORE installing interceptor so origFetch captures the mock
     const mockFetch = async () => {
-      return new Response(JSON.stringify({result: "ok"}), {
+      return new Response(JSON.stringify({ result: "ok" }), {
         status: 200,
-        headers: {"content-type": "application/json"}
+        headers: { "content-type": "application/json" },
       });
     };
     globalThis.fetch = mockFetch;
-    
+
     plugin.installInterceptor();
-    
+
     const sessionId = "test-session";
     const request = new Request("https://example.com", {
       method: "POST",
       headers: {
         "x-opencode-session": sessionId,
-        "content-type": "application/json"
+        "content-type": "application/json",
       },
-      body: JSON.stringify({test: true})
+      body: JSON.stringify({ test: true }),
     });
 
-const response = await plugin.tracedFetch(request);
-    
+    const response = await plugin.tracedFetch(request);
+
     const filePath = join(tempDir, sessionId, "1.json");
     await waitForFile(filePath, 5000);
     expect(existsSync(filePath)).toBe(true);
@@ -126,39 +130,39 @@ const response = await plugin.tracedFetch(request);
   test("sanitizeStackTrace removes sensitive information", () => {
     const sanitizeStackTrace = plugin["sanitizeStackTrace"];
     const userHome = homedir();
-    
+
     const stack = `Error at ${userHome}/sensitive/path/file.ts:10:5
 Connection to 192.168.1.100:8080 failed
 Server running on 127.0.0.1:3000`;
-    
+
     const sanitized = sanitizeStackTrace(stack);
-    
-    expect(sanitized).toContain('[HOME]');
-    expect(sanitized).toContain('[IP]');
-    expect(sanitized).toContain(':[PORT]');
+
+    expect(sanitized).toContain("[HOME]");
+    expect(sanitized).toContain("[IP]");
+    expect(sanitized).toContain(":[PORT]");
     expect(sanitized).not.toContain(userHome);
-    expect(sanitized).not.toContain('192.168.1.100');
-    expect(sanitized).not.toContain('127.0.0.1');
-    expect(sanitized).not.toContain(':8080');
-    expect(sanitized).not.toContain(':3000');
+    expect(sanitized).not.toContain("192.168.1.100");
+    expect(sanitized).not.toContain("127.0.0.1");
+    expect(sanitized).not.toContain(":8080");
+    expect(sanitized).not.toContain(":3000");
   });
 
   test("sanitizeStackTrace redacts ports in Windows paths", () => {
     const sanitizeStackTrace = plugin["sanitizeStackTrace"];
     const userHome = homedir();
-    
+
     const windowsStack = `Error at ${userHome}\\project\\file.ts:10:5
 Connection to 10.0.0.1:8080 failed
 Listening on 0.0.0.0:3000`;
-    
+
     const sanitized = sanitizeStackTrace(windowsStack);
-    
-    expect(sanitized).toContain('[HOME]');
-    expect(sanitized).toContain('[IP]');
-    expect(sanitized).toContain(':[PORT]');
-    expect(sanitized).not.toContain('10.0.0.1');
-    expect(sanitized).not.toContain('0.0.0.0');
-    expect(sanitized).not.toContain(':8080');
-    expect(sanitized).not.toContain(':3000');
+
+    expect(sanitized).toContain("[HOME]");
+    expect(sanitized).toContain("[IP]");
+    expect(sanitized).toContain(":[PORT]");
+    expect(sanitized).not.toContain("10.0.0.1");
+    expect(sanitized).not.toContain("0.0.0.0");
+    expect(sanitized).not.toContain(":8080");
+    expect(sanitized).not.toContain(":3000");
   });
 });

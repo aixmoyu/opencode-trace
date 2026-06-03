@@ -3,7 +3,11 @@
     <div class="metadata-header">{{ title }}</div>
     <div class="metadata-body">
       <slot name="before-sections" />
-      <div v-for="section in sections" :key="section.title" class="stat-section">
+      <div
+        v-for="section in sections"
+        :key="section.title"
+        class="stat-section"
+      >
         <div class="stat-section-title">{{ section.title }}</div>
         <div v-if="section.layout === 'inline'" class="stat-row-inline">
           <span
@@ -12,7 +16,12 @@
             :class="['stat-item', item.modifier]"
           >
             <span class="stat-key">{{ item.key }}</span>
-            <router-link v-if="item.link" class="stat-val stat-link" :to="item.link">{{ item.value }}</router-link>
+            <router-link
+              v-if="item.link"
+              class="stat-val stat-link"
+              :to="item.link"
+              >{{ item.value }}</router-link
+            >
             <span v-else class="stat-val">{{ item.value }}</span>
           </span>
         </div>
@@ -23,7 +32,12 @@
             :class="['stat-item', item.modifier]"
           >
             <span class="stat-key">{{ item.key }}</span>
-            <router-link v-if="item.link" class="stat-val stat-link" :to="item.link">{{ item.value }}</router-link>
+            <router-link
+              v-if="item.link"
+              class="stat-val stat-link"
+              :to="item.link"
+              >{{ item.value }}</router-link
+            >
             <span v-else class="stat-val">{{ item.value }}</span>
           </span>
         </div>

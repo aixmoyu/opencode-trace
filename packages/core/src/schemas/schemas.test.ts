@@ -98,7 +98,10 @@ describe("Block schemas", () => {
   });
 
   it("should parse a ThinkingBlock", () => {
-    const result = ThinkingBlockSchema.safeParse({ type: "thinking", thinking: "Hmm..." });
+    const result = ThinkingBlockSchema.safeParse({
+      type: "thinking",
+      thinking: "Hmm...",
+    });
     expect(result.success).toBe(true);
   });
 
@@ -186,7 +189,12 @@ describe("Delta schemas", () => {
   it("should parse a Delta with sys and tool", () => {
     const result = DeltaSchema.safeParse({
       sys: { id: "sys", added: [{ type: "text", text: "system" }] },
-      tool: { id: "tool", removed: [{ type: "td", name: "f", description: null, inputSchema: {} }] },
+      tool: {
+        id: "tool",
+        removed: [
+          { type: "td", name: "f", description: null, inputSchema: {} },
+        ],
+      },
       msgs: [],
     });
     expect(result.success).toBe(true);
@@ -215,13 +223,25 @@ describe("SessionMetadataSchema", () => {
   it("should parse valid SessionMetadata", () => {
     const result = SessionMetadataSchema.safeParse({
       sessionId: "abc",
-      tokenUsage: { inputMissTokens: 100, inputHitTokens: 50, outputTokens: 200, totalTokens: 350, cacheHitRate: 0.33 },
+      tokenUsage: {
+        inputMissTokens: 100,
+        inputHitTokens: 50,
+        outputTokens: 200,
+        totalTokens: 350,
+        cacheHitRate: 0.33,
+      },
       requestCount: 5,
       subSessions: [],
       parentSession: null,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:01:00.000Z",
-      latencyStats: { avgTTFT: 0.5, maxTTFT: 1.0, avgTPOT: 0.1, maxTPOT: 0.2, streamRequestCount: 3 },
+      latencyStats: {
+        avgTTFT: 0.5,
+        maxTTFT: 1.0,
+        avgTPOT: 0.1,
+        maxTPOT: 0.2,
+        streamRequestCount: 3,
+      },
       durationStats: { wallTime: 60000, totalRequestDuration: 30000 },
     });
     expect(result.success).toBe(true);

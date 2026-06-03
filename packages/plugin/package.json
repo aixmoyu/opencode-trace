@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/trace.js",
       "types": "./dist/trace.d.ts"
+    },
+    "./tracer": {
+      "import": "./dist/tracer.js",
+      "types": "./dist/tracer.d.ts"
     }
   },
   "files": [

@@ -40,24 +40,33 @@ describe("getTraceDir", () => {
 
 describe("sanitizePath", () => {
   it("replaces user home path with [HOME]", () => {
-    const result = sanitizePath("/home/testuser/project/file.ts", "/home/testuser");
+    const result = sanitizePath(
+      "/home/testuser/project/file.ts",
+      "/home/testuser",
+    );
     expect(result).toBe("[HOME]/project/file.ts");
   });
 
   it("replaces Windows user home path with [HOME]", () => {
-    const result = sanitizePath("C:\\Users\\testuser\\project\\file.ts", "C:\\Users\\testuser");
+    const result = sanitizePath(
+      "C:\\Users\\testuser\\project\\file.ts",
+      "C:\\Users\\testuser",
+    );
     expect(result).toBe("[HOME]\\project\\file.ts");
   });
 
   it("handles escaped backslashes in Windows paths", () => {
-    const result = sanitizePath("C:\\Users\\testuser\\folder", "C:\\Users\\testuser");
+    const result = sanitizePath(
+      "C:\\Users\\testuser\\folder",
+      "C:\\Users\\testuser",
+    );
     expect(result).toBe("[HOME]\\folder");
   });
 
   it("replaces multiple occurrences", () => {
     const result = sanitizePath(
       "/home/testuser/a and /home/testuser/b",
-      "/home/testuser"
+      "/home/testuser",
     );
     expect(result).toBe("[HOME]/a and [HOME]/b");
   });

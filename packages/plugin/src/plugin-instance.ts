@@ -4,9 +4,18 @@ import { StateManager } from "@opencode-trace/core/state";
 import { redactHeaders } from "./redact.js";
 import { sanitizePath } from "@opencode-trace/core";
 import { homedir } from "node:os";
+import { join } from "node:path";
 
 import { logger } from "@opencode-trace/core";
 import type { TraceRecord, TraceRequest, TraceResponse } from "./trace.js";
+
+
+export interface TracerConfig {
+  /** Global trace storage directory. Defaults to ~/.opencode-trace */
+  globalDir?: string;
+  /** Project-level trace storage directory. Must be provided by caller */
+  localDir: string;
+}
 
 export class TracePlugin {
   private origFetch: typeof fetch;
@@ -19,10 +28,13 @@ export class TracePlugin {
   private localDir: string;
   private currentDir: string;
 
-  constructor(globalDir: string, localDir: string) {
-    this.globalDir = globalDir;
-    this.localDir = localDir;
-    this.currentDir = globalDir; // Default to global
+  constructor(config: TracerConfig) {
+    if (!config.localDir) {
+      throw new TypeError("TracerConfig.localDir is required");
+    }
+    this.globalDir = config.globalDir ?? join(homedir(), '.opencode-trace');
+    this.localDir = config.localDir;
+    this.currentDir = this.globalDir; // Default to global
     this.origFetch = globalThis.fetch; // Will be updated in installInterceptor
     this.writeQueue = new AsyncWriteQueue(this.currentDir);
     this.stateQueue = new AsyncStateQueue();
@@ -38,7 +50,12 @@ export class TracePlugin {
     this.writeQueue = new AsyncWriteQueue(this.currentDir);
   }
 
-  getStorageStatus(): { mode: string; globalDir: string; localDir: string; currentDir: string } {
+  getStorageStatus(): {
+    mode: string;
+    globalDir: string;
+    localDir: string;
+    currentDir: string;
+  } {
     return {
       mode: this.currentDir === this.globalDir ? "global" : "local",
       globalDir: this.globalDir,
@@ -47,39 +64,72 @@ export class TracePlugin {
     };
   }
 
-  async tracedFetch(input: Parameters<typeof globalThis.fetch>[0], init?: Parameters<typeof globalThis.fetch>[1]): Promise<Response> {
+  async tracedFetch(
+    input: Parameters<typeof globalThis.fetch>[0],
+    init?: Parameters<typeof globalThis.fetch>[1],
+    origFetch?: typeof globalThis.fetch,
+  ): Promise<Response> {
+    const delegate = origFetch ?? this.origFetch;
     const req = this.parseRequest(input, init);
-    if (!req) return this.origFetch(input, init);
+    if (!req) return delegate(input, init);
 
     const meta = await this.captureRequestMeta(req);
-    if (!meta) return this.origFetch(req);
+    if (!meta) return delegate(req);
 
     let res: Response;
     try {
-      res = await this.origFetch(req);
+      res = await delegate(req);
     } catch (err) {
-      const error = err instanceof Error
-        ? { message: err.message, stack: this.sanitizeStackTrace(err.stack) }
-        : { message: String(err) };
-      const record = this.createTraceRecord(meta.seq, meta.purpose, meta.requestAt, meta.traceReq, null, error, { requestSentAt: meta.requestSentAt });
+      const error =
+        err instanceof Error
+          ? { message: err.message, stack: this.sanitizeStackTrace(err.stack) }
+          : { message: String(err) };
+      const record = this.createTraceRecord(
+        meta.seq,
+        meta.purpose,
+        meta.requestAt,
+        meta.traceReq,
+        null,
+        error,
+        { requestSentAt: meta.requestSentAt },
+      );
       this.writeQueue.enqueue(meta.session, meta.seq, record);
       this.stateQueue.enqueue(meta.session, meta.seq, record);
       throw err;
     }
 
-    let latencyMeta: { requestSentAt: number, firstTokenAt: number | null, lastTokenAt: number | null } | undefined;
+    let latencyMeta:
+      | {
+          requestSentAt: number;
+          firstTokenAt: number | null;
+          lastTokenAt: number | null;
+        }
+      | undefined;
     if (meta.isStream && res.body) {
       res = this.wrapStreamResponse(res, meta.requestSentAt);
       latencyMeta = (res as any).__latencyMeta;
     }
 
-    void this.recordResponse(meta.session, meta.seq, meta.purpose, meta.requestAt, meta.traceReq, res, latencyMeta);
+    void this.recordResponse(
+      meta.session,
+      meta.seq,
+      meta.purpose,
+      meta.requestAt,
+      meta.traceReq,
+      res,
+      latencyMeta,
+    );
 
     return res;
   }
 
   private getSessionId(req: Request): string | undefined {
-    return req.headers.get("x-opencode-session") ?? req.headers.get("x-session-affinity") ?? req.headers.get("session_id") ?? undefined;
+    return (
+      req.headers.get("x-opencode-session") ??
+      req.headers.get("x-session-affinity") ??
+      req.headers.get("session_id") ??
+      undefined
+    );
   }
 
   private shouldRecord(sessionId?: string): boolean {
@@ -98,16 +148,28 @@ export class TracePlugin {
 
   private headersToObject(headers: Headers): Record<string, string> {
     const obj: Record<string, string> = {};
-    headers.forEach((value, key) => { obj[key] = value; });
+    headers.forEach((value, key) => {
+      obj[key] = value;
+    });
     return obj;
   }
 
   private classifyPurpose(raw: unknown): string {
-    if (typeof raw === "object" && raw !== null && !Array.isArray(raw) && Array.isArray((raw as any).tools) && (raw as any).tools.length > 0) return "";
+    if (
+      typeof raw === "object" &&
+      raw !== null &&
+      !Array.isArray(raw) &&
+      Array.isArray((raw as any).tools) &&
+      (raw as any).tools.length > 0
+    )
+      return "";
     return "[meta]";
   }
 
-  private parseRequest(input: Parameters<typeof globalThis.fetch>[0], init?: Parameters<typeof globalThis.fetch>[1]): Request | null {
+  private parseRequest(
+    input: Parameters<typeof globalThis.fetch>[0],
+    init?: Parameters<typeof globalThis.fetch>[1],
+  ): Request | null {
     try {
       return new Request(input, init);
     } catch {
@@ -115,7 +177,18 @@ export class TracePlugin {
     }
   }
 
-  private async captureRequestMeta(req: Request): Promise<{ session: string, seq: number, requestSentAt: number, requestAt: string, reqBody: unknown, isStream: boolean, purpose: string, traceReq: TraceRequest } | null> {
+  private async captureRequestMeta(
+    req: Request,
+  ): Promise<{
+    session: string;
+    seq: number;
+    requestSentAt: number;
+    requestAt: string;
+    reqBody: unknown;
+    isStream: boolean;
+    purpose: string;
+    traceReq: TraceRequest;
+  } | null> {
     const session = this.getSessionId(req);
     if (session === undefined) return null;
 
@@ -127,10 +200,16 @@ export class TracePlugin {
     const requestSentAt = performance.now();
     const requestAt = new Date().toISOString();
 
-    const reqBodyText = await req.clone().text().catch((err) => {
-      logger.error("Failed to clone request body", { url: req.url, error: String(err) });
-      return "";
-    });
+    const reqBodyText = await req
+      .clone()
+      .text()
+      .catch((err) => {
+        logger.error("Failed to clone request body", {
+          url: req.url,
+          error: String(err),
+        });
+        return "";
+      });
     const reqBody = this.parseBody(reqBodyText);
 
     let isStream = false;
@@ -149,11 +228,24 @@ export class TracePlugin {
       body: reqBody,
     };
 
-    return { session, seq, requestSentAt, requestAt, reqBody, isStream, purpose, traceReq };
+    return {
+      session,
+      seq,
+      requestSentAt,
+      requestAt,
+      reqBody,
+      isStream,
+      purpose,
+      traceReq,
+    };
   }
 
   private wrapStreamResponse(res: Response, requestSentAt: number): Response {
-    const latencyMeta: { requestSentAt: number, firstTokenAt: number | null, lastTokenAt: number | null } = { requestSentAt, firstTokenAt: null, lastTokenAt: null };
+    const latencyMeta: {
+      requestSentAt: number;
+      firstTokenAt: number | null;
+      lastTokenAt: number | null;
+    } = { requestSentAt, firstTokenAt: null, lastTokenAt: null };
 
     const transform = new TransformStream({
       transform(chunk, controller) {
@@ -177,7 +269,19 @@ export class TracePlugin {
     return wrappedRes;
   }
 
-  private async recordResponse(session: string, seq: number, purpose: string, requestAt: string, traceReq: TraceRequest, res: Response, latencyMeta?: { requestSentAt: number, firstTokenAt?: number | null, lastTokenAt?: number | null }): Promise<void> {
+  private async recordResponse(
+    session: string,
+    seq: number,
+    purpose: string,
+    requestAt: string,
+    traceReq: TraceRequest,
+    res: Response,
+    latencyMeta?: {
+      requestSentAt: number;
+      firstTokenAt?: number | null;
+      lastTokenAt?: number | null;
+    },
+  ): Promise<void> {
     try {
       const resBodyText = await res.clone().text();
       const resBody = this.parseBody(resBodyText);
@@ -187,24 +291,45 @@ export class TracePlugin {
         headers: redactHeaders(this.headersToObject(res.headers)),
         body: resBody,
       };
-      const normalizedLatency = latencyMeta ? {
-        requestSentAt: latencyMeta.requestSentAt,
-        firstTokenAt: latencyMeta.firstTokenAt ?? undefined,
-        lastTokenAt: latencyMeta.lastTokenAt ?? undefined,
-      } : undefined;
-      const record = this.createTraceRecord(seq, purpose, requestAt, traceReq, traceRes, null, normalizedLatency);
+      const normalizedLatency = latencyMeta
+        ? {
+            requestSentAt: latencyMeta.requestSentAt,
+            firstTokenAt: latencyMeta.firstTokenAt ?? undefined,
+            lastTokenAt: latencyMeta.lastTokenAt ?? undefined,
+          }
+        : undefined;
+      const record = this.createTraceRecord(
+        seq,
+        purpose,
+        requestAt,
+        traceReq,
+        traceRes,
+        null,
+        normalizedLatency,
+      );
       this.writeQueue.enqueue(session, seq, record);
       this.stateQueue.enqueue(session, seq, record);
     } catch (err) {
-      const error = err instanceof Error
-        ? { message: err.message, stack: this.sanitizeStackTrace(err.stack) }
-        : { message: String(err) };
-      const normalizedLatency = latencyMeta ? {
-        requestSentAt: latencyMeta.requestSentAt,
-        firstTokenAt: latencyMeta.firstTokenAt ?? undefined,
-        lastTokenAt: latencyMeta.lastTokenAt ?? undefined,
-      } : undefined;
-      const record = this.createTraceRecord(seq, purpose, requestAt, traceReq, null, error, normalizedLatency);
+      const error =
+        err instanceof Error
+          ? { message: err.message, stack: this.sanitizeStackTrace(err.stack) }
+          : { message: String(err) };
+      const normalizedLatency = latencyMeta
+        ? {
+            requestSentAt: latencyMeta.requestSentAt,
+            firstTokenAt: latencyMeta.firstTokenAt ?? undefined,
+            lastTokenAt: latencyMeta.lastTokenAt ?? undefined,
+          }
+        : undefined;
+      const record = this.createTraceRecord(
+        seq,
+        purpose,
+        requestAt,
+        traceReq,
+        null,
+        error,
+        normalizedLatency,
+      );
       this.writeQueue.enqueue(session, seq, record);
       this.stateQueue.enqueue(session, seq, record);
     }
@@ -214,8 +339,8 @@ export class TracePlugin {
     if (!stack) return undefined;
     const userHome = homedir();
     return sanitizePath(stack, userHome)
-      .replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, '[IP]')
-      .replace(/:\d{4,5}(?=[\/\\\s]|$)/g, ':[PORT]');
+      .replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, "[IP]")
+      .replace(/:\d{4,5}(?=[\/\\\s]|$)/g, ":[PORT]");
   }
 
   private createTraceRecord(
@@ -224,8 +349,12 @@ export class TracePlugin {
     requestAt: string,
     traceReq: TraceRequest,
     traceRes: TraceResponse | null,
-    error: { message: string, stack?: string } | null,
-    latency?: { requestSentAt?: number, firstTokenAt?: number, lastTokenAt?: number }
+    error: { message: string; stack?: string } | null,
+    latency?: {
+      requestSentAt?: number;
+      firstTokenAt?: number;
+      lastTokenAt?: number;
+    },
   ): TraceRecord {
     return {
       id: seq,
@@ -241,14 +370,27 @@ export class TracePlugin {
     };
   }
 
-  getInterceptor(): typeof fetch {
-    return this.tracedFetch.bind(this);
+  /** Wrap a fetch function with trace recording.
+   *  Returns a new function — independent per call — that records the request/response
+   *  and delegates to the passed-in fetch for the actual HTTP call. */
+  wrap(fetch: typeof globalThis.fetch): typeof fetch {
+    const capturedOrig = fetch;
+    return async (input, init) => this.tracedFetch(input, init, capturedOrig);
   }
 
+  /** Convenience: wraps the current globalThis.fetch.
+   *  Caller is responsible for patching globalThis.fetch with the result. */
+  getInterceptor(): typeof fetch {
+    const capturedOrig = this.origFetch;
+    return async (input, init) => this.tracedFetch(input, init, capturedOrig);
+  }
+
+  /** Install the interceptor on globalThis.fetch automatically.
+   *  Used internally by the "." entry. For library API usage, prefer wrap() or getInterceptor(). */
   installInterceptor(): void {
     if (this.interceptorInstalled) return;
-    this.origFetch = globalThis.fetch; // Capture current fetch at installation time
-    globalThis.fetch = this.getInterceptor();
+    this.origFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => this.tracedFetch(input, init, this.origFetch);
     this.interceptorInstalled = true;
   }
 

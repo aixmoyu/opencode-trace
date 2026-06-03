@@ -44,7 +44,10 @@ export function parseSSE(raw: string): SSEEvent[] {
         current.id = value;
         break;
       case "data":
-        current.data = (current.data ?? "") + (current.data !== undefined ? "\n" : "") + value;
+        current.data =
+          (current.data ?? "") +
+          (current.data !== undefined ? "\n" : "") +
+          value;
         break;
     }
   }

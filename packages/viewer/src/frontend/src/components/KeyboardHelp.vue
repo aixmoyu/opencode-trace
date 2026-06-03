@@ -12,11 +12,15 @@
         <h3 id="keyboard-help-title">Keyboard Shortcuts</h3>
         <div class="shortcut-list">
           <div class="shortcut"><kbd>/</kbd> Focus search</div>
-          <div class="shortcut"><kbd>E</kbd> Export session (on session view)</div>
+          <div class="shortcut">
+            <kbd>E</kbd> Export session (on session view)
+          </div>
           <div class="shortcut"><kbd>?</kbd> Show this help</div>
           <div class="shortcut"><kbd>Esc</kbd> Close dialogs</div>
         </div>
-        <button class="help-close" ref="closeBtnRef" @click="$emit('close')">Close</button>
+        <button class="help-close" ref="closeBtnRef" @click="$emit('close')">
+          Close
+        </button>
       </div>
     </div>
   </Teleport>

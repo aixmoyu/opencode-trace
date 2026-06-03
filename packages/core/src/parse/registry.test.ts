@@ -1,6 +1,10 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import type { Parser, Conversation } from "./types.js";
-import { clearParsersForTesting, getParsers, registerParser } from "./registry.js";
+import {
+  clearParsersForTesting,
+  getParsers,
+  registerParser,
+} from "./registry.js";
 
 function makeParser(provider: string, matchResult: boolean): Parser {
   return {

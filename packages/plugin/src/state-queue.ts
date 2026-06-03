@@ -3,7 +3,8 @@ import { logger } from "@opencode-trace/core";
 import type { TraceRecord } from "./trace.js";
 
 export class AsyncStateQueue {
-  private queue: Array<{ session: string, seq: number, record: TraceRecord }> = [];
+  private queue: Array<{ session: string; seq: number; record: TraceRecord }> =
+    [];
   private stateManager: StateManager | null = null;
   private writing: boolean = false;
   private batchSize: number;
@@ -45,7 +46,7 @@ export class AsyncStateQueue {
 
   async flush(): Promise<void> {
     while (this.writing || this.queue.length > 0) {
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
 }

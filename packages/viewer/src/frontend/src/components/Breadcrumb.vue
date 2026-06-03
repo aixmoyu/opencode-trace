@@ -1,7 +1,9 @@
 <template>
   <nav v-if="items.length > 0" class="breadcrumb" aria-label="Breadcrumb">
     <template v-for="(item, i) in items" :key="item.href">
-      <router-link v-if="i < items.length - 1" :to="item.href">{{ item.label }}</router-link>
+      <router-link v-if="i < items.length - 1" :to="item.href">{{
+        item.label
+      }}</router-link>
       <span v-if="i < items.length - 1" class="sep">/</span>
       <span v-else class="current">{{ item.label }}</span>
     </template>
@@ -25,7 +27,11 @@ const items = computed<Crumb[]>(() => {
   if (route.name === "timeline" && route.params.sessionId) {
     const sid = route.params.sessionId as string;
     crumbs.push({ label: sid, href: `/session/${sid}` });
-  } else if (route.name === "record" && route.params.sessionId && route.params.recordId) {
+  } else if (
+    route.name === "record" &&
+    route.params.sessionId &&
+    route.params.recordId
+  ) {
     const sid = route.params.sessionId as string;
     const rid = route.params.recordId as string;
     crumbs.push({ label: sid, href: `/session/${sid}` });

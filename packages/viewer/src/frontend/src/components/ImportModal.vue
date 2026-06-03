@@ -11,32 +11,55 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3 id="import-modal-title">Import Session</h3>
-          <button class="modal-close" aria-label="Close import modal" @click="$emit('close')">&times;</button>
+          <button
+            class="modal-close"
+            aria-label="Close import modal"
+            @click="$emit('close')"
+          >
+            &times;
+          </button>
         </div>
         <div class="modal-body">
           <label class="file-label">
             <span class="file-label-text">Select ZIP file:</span>
             <div class="file-input-wrapper">
-              <input type="file" accept=".zip" aria-label="Select ZIP file to import" @change="handleFile" class="file-input-native" />
+              <input
+                type="file"
+                accept=".zip"
+                aria-label="Select ZIP file to import"
+                @change="handleFile"
+                class="file-input-native"
+              />
               <span class="file-input-button">Choose File</span>
             </div>
           </label>
           <div class="import-status">
-            <div v-if="uploading" class="loading"><div class="spinner"></div> Uploading...</div>
-            <div v-else-if="statusMessage" :class="['status-msg', statusType]">{{ statusMessage }}</div>
+            <div v-if="uploading" class="loading">
+              <div class="spinner"></div>
+              Uploading...
+            </div>
+            <div v-else-if="statusMessage" :class="['status-msg', statusType]">
+              {{ statusMessage }}
+            </div>
           </div>
           <div v-if="conflicts.length > 0" class="conflict-panel">
             <h4>Session Conflicts Detected</h4>
             <div class="conflict-list">
               <div v-for="c in conflicts" :key="c.id" class="conflict-item">
                 <span class="conflict-id">{{ c.id }}</span>
-                <span class="conflict-title">{{ c.title || '' }}</span>
+                <span class="conflict-title">{{ c.title || "" }}</span>
               </div>
             </div>
             <div class="conflict-actions">
-              <button class="action-rename" @click="resolveConflicts('rename')">Rename All</button>
-              <button class="action-skip" @click="resolveConflicts('skip')">Skip All</button>
-              <button class="action-cancel" @click="$emit('close')">Cancel</button>
+              <button class="action-rename" @click="resolveConflicts('rename')">
+                Rename All
+              </button>
+              <button class="action-skip" @click="resolveConflicts('skip')">
+                Skip All
+              </button>
+              <button class="action-cancel" @click="$emit('close')">
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -79,7 +102,10 @@ async function handleFile(e: Event) {
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await fetch("/api/sessions/import", { method: "POST", body: formData });
+    const res = await fetch("/api/sessions/import", {
+      method: "POST",
+      body: formData,
+    });
     const result = await res.json();
 
     if (result.conflicts && result.conflicts.length > 0) {
@@ -113,7 +139,10 @@ async function resolveConflicts(action: string) {
     formData.append("file", pendingFile);
     formData.append("conflictStrategy", action);
 
-    const res = await fetch("/api/sessions/import", { method: "POST", body: formData });
+    const res = await fetch("/api/sessions/import", {
+      method: "POST",
+      body: formData,
+    });
     const result = await res.json();
 
     if (result.imported) {

@@ -1,9 +1,23 @@
 <template>
-  <div v-if="!hasChanges" class="empty-state"><p>No change data for this request</p></div>
+  <div v-if="!hasChanges" class="empty-state">
+    <p>No change data for this request</p>
+  </div>
   <template v-else>
     <template v-if="sysAdded.length > 0 || sysRemoved.length > 0">
-      <div class="section-title" :class="{ expanded: expandedSections.sys }" @click="toggleSection('sys')">
-        <svg class="section-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <div
+        class="section-title"
+        :class="{ expanded: expandedSections.sys }"
+        @click="toggleSection('sys')"
+      >
+        <svg
+          class="section-arrow"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path d="m6 9 6 6 6-6" />
         </svg>
         SYSTEM PROMPT
@@ -15,7 +29,11 @@
             <span class="action-tag del">-DEL</span>
           </div>
           <div class="change-card-body">
-            <BlockRenderer v-for="(block, i) in sysRemoved" :key="'sys-rem-' + i" :block="block" />
+            <BlockRenderer
+              v-for="(block, i) in sysRemoved"
+              :key="'sys-rem-' + i"
+              :block="block"
+            />
           </div>
         </div>
         <div v-if="sysAdded.length > 0" class="change-card added">
@@ -24,15 +42,31 @@
             <span class="action-tag new">+NEW</span>
           </div>
           <div class="change-card-body">
-            <BlockRenderer v-for="(block, i) in sysAdded" :key="'sys-add-' + i" :block="block" />
+            <BlockRenderer
+              v-for="(block, i) in sysAdded"
+              :key="'sys-add-' + i"
+              :block="block"
+            />
           </div>
         </div>
       </div>
     </template>
 
     <template v-if="toolAdded.length > 0 || toolRemoved.length > 0">
-      <div class="section-title" :class="{ expanded: expandedSections.tool }" @click="toggleSection('tool')">
-        <svg class="section-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <div
+        class="section-title"
+        :class="{ expanded: expandedSections.tool }"
+        @click="toggleSection('tool')"
+      >
+        <svg
+          class="section-arrow"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path d="m6 9 6 6 6-6" />
         </svg>
         TOOL DEFINITIONS
@@ -44,7 +78,11 @@
             <span class="action-tag new">+NEW</span>
           </div>
           <div class="change-card-body">
-            <BlockRenderer v-for="(block, i) in toolAdded" :key="'tool-add-' + i" :block="block" />
+            <BlockRenderer
+              v-for="(block, i) in toolAdded"
+              :key="'tool-add-' + i"
+              :block="block"
+            />
           </div>
         </div>
         <div v-if="toolRemoved.length > 0" class="change-card removed">
@@ -53,15 +91,31 @@
             <span class="action-tag del">-DEL</span>
           </div>
           <div class="change-card-body">
-            <BlockRenderer v-for="(block, i) in toolRemoved" :key="'tool-rem-' + i" :block="block" />
+            <BlockRenderer
+              v-for="(block, i) in toolRemoved"
+              :key="'tool-rem-' + i"
+              :block="block"
+            />
           </div>
         </div>
       </div>
     </template>
 
     <template v-if="msgAdded.length > 0 || msgRemoved.length > 0">
-      <div class="section-title" :class="{ expanded: expandedSections.msgs }" @click="toggleSection('msgs')">
-        <svg class="section-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <div
+        class="section-title"
+        :class="{ expanded: expandedSections.msgs }"
+        @click="toggleSection('msgs')"
+      >
+        <svg
+          class="section-arrow"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path d="m6 9 6 6 6-6" />
         </svg>
         MESSAGES
@@ -73,7 +127,11 @@
             <span class="action-tag del">-DEL</span>
           </div>
           <div class="change-card-body">
-            <BlockRenderer v-for="(block, i) in msgRemoved" :key="'msg-rem-' + i" :block="block" />
+            <BlockRenderer
+              v-for="(block, i) in msgRemoved"
+              :key="'msg-rem-' + i"
+              :block="block"
+            />
           </div>
         </div>
         <div v-if="msgAdded.length > 0" class="change-card added">
@@ -82,7 +140,11 @@
             <span class="action-tag new">+NEW</span>
           </div>
           <div class="change-card-body">
-            <BlockRenderer v-for="(block, i) in msgAdded" :key="'msg-add-' + i" :block="block" />
+            <BlockRenderer
+              v-for="(block, i) in msgAdded"
+              :key="'msg-add-' + i"
+              :block="block"
+            />
           </div>
         </div>
       </div>
@@ -141,9 +203,14 @@ const msgRemoved = computed(() => {
 });
 
 const hasChanges = computed(() => {
-  return sysAdded.value.length > 0 || sysRemoved.value.length > 0 ||
-    toolAdded.value.length > 0 || toolRemoved.value.length > 0 ||
-    msgAdded.value.length > 0 || msgRemoved.value.length > 0;
+  return (
+    sysAdded.value.length > 0 ||
+    sysRemoved.value.length > 0 ||
+    toolAdded.value.length > 0 ||
+    toolRemoved.value.length > 0 ||
+    msgAdded.value.length > 0 ||
+    msgRemoved.value.length > 0
+  );
 });
 </script>
 
@@ -187,9 +254,18 @@ const hasChanges = computed(() => {
   border-radius: 2px;
 }
 
-.cat-tag.sys { background: rgba(139, 92, 246, 0.15); color: var(--sys-color); }
-.cat-tag.tool { background: rgba(255, 159, 10, 0.15); color: var(--warning); }
-.cat-tag.msg { background: rgba(61, 139, 255, 0.15); color: var(--accent); }
+.cat-tag.sys {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--sys-color);
+}
+.cat-tag.tool {
+  background: rgba(255, 159, 10, 0.15);
+  color: var(--warning);
+}
+.cat-tag.msg {
+  background: rgba(61, 139, 255, 0.15);
+  color: var(--accent);
+}
 
 .action-tag {
   font-size: 11px;
@@ -198,6 +274,12 @@ const hasChanges = computed(() => {
   border-radius: 2px;
 }
 
-.action-tag.new { background: rgba(48, 209, 88, 0.15); color: var(--success); }
-.action-tag.del { background: rgba(255, 59, 48, 0.15); color: var(--danger); }
+.action-tag.new {
+  background: rgba(48, 209, 88, 0.15);
+  color: var(--success);
+}
+.action-tag.del {
+  background: rgba(255, 59, 48, 0.15);
+  color: var(--danger);
+}
 </style>

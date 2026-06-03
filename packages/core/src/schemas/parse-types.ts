@@ -71,5 +71,3 @@ export const ConversationSchema = z.object({
   usage: UsageSchema.nullable(),
   stream: z.boolean(),
 });
-
-

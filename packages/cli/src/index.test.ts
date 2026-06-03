@@ -7,7 +7,10 @@ import { join } from "node:path";
 
 const CLI_PATH = resolve(__dirname, "..", "dist", "index.js");
 
-function runCLI(args: string, cwd?: string): { stdout: string; stderr: string; exitCode: number } {
+function runCLI(
+  args: string,
+  cwd?: string,
+): { stdout: string; stderr: string; exitCode: number } {
   try {
     const stdout = execSync(`node ${CLI_PATH} ${args}`, {
       encoding: "utf-8",

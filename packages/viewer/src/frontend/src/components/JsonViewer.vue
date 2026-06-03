@@ -1,9 +1,24 @@
 <template>
   <div class="json-container">
-    <button class="copy-btn" aria-label="Copy JSON content" @click="copyContent">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <button
+      class="copy-btn"
+      aria-label="Copy JSON content"
+      @click="copyContent"
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        <path
+          d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+        ></path>
       </svg>
     </button>
     <div v-for="(line, i) in lines" :key="i" class="json-line">
@@ -49,7 +64,7 @@ const lines = computed(() => {
         cls = "json-null";
       }
       return `<span class="${cls}">${match}</span>`;
-    }
+    },
   );
 
   return highlighted.split("\n");
@@ -57,11 +72,14 @@ const lines = computed(() => {
 
 function copyContent() {
   const text = JSON.stringify(props.data, null, 2);
-  navigator.clipboard.writeText(text).then(() => {
-    showToast("Copied!", "success", undefined, undefined, 2000);
-  }).catch((e) => {
-    console.error("Copy failed:", e);
-  });
+  navigator.clipboard
+    .writeText(text)
+    .then(() => {
+      showToast("Copied!", "success", undefined, undefined, 2000);
+    })
+    .catch((e) => {
+      console.error("Copy failed:", e);
+    });
 }
 </script>
 

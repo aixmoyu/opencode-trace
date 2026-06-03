@@ -5,7 +5,7 @@ const logFormat = winston.format.combine(
   winston.format.printf(({ timestamp, level, message, ...meta }) => {
     const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
     return `${timestamp} [${level.toUpperCase()}] ${message}${metaStr}`;
-  })
+  }),
 );
 
 export const logger = winston.createLogger({

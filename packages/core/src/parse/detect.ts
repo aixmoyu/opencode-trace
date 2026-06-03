@@ -2,7 +2,11 @@ import type { TraceRecord } from "../types.js";
 import type { Conversation, Entry } from "./types.js";
 import { getParsers } from "./registry.js";
 import { createMsgEntry, createTextBlock } from "./utils.js";
-import { sseOpenaiChatParse, sseOpenaiResponsesParse, sseAnthropicParse } from "../transform/index.js";
+import {
+  sseOpenaiChatParse,
+  sseOpenaiResponsesParse,
+  sseAnthropicParse,
+} from "../transform/index.js";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -22,21 +26,30 @@ function fallbackParse(reqBody: unknown, resBody: unknown): Conversation {
         if (blocks.length === 0) {
           blocks.push({ type: "text", text: "" });
         }
-        const role = (typeof msg.role === "string" ? msg.role : "user") as "user" | "assistant" | "tool";
+        const role = (typeof msg.role === "string" ? msg.role : "user") as
+          | "user"
+          | "assistant"
+          | "tool";
         msgs.push(createMsgEntry(role, blocks));
       }
     }
   }
   return {
     provider: "unknown",
-    model: isRecord(reqBody) && typeof reqBody.model === "string" ? reqBody.model : null,
+    model:
+      isRecord(reqBody) && typeof reqBody.model === "string"
+        ? reqBody.model
+        : null,
     msgs,
     usage: null,
     stream: false,
   };
 }
 
-function parseSSEMessagesWithUsage(provider: string, raw: string): { messages: Entry[]; usage: Conversation["usage"] } {
+function parseSSEMessagesWithUsage(
+  provider: string,
+  raw: string,
+): { messages: Entry[]; usage: Conversation["usage"] } {
   if (provider === "anthropic") return sseAnthropicParse(raw);
   if (provider === "openai-responses") return sseOpenaiResponsesParse(raw);
   return sseOpenaiChatParse(raw);
@@ -121,18 +134,20 @@ export interface LatencyInfo {
 }
 
 export function extractLatency(record: TraceRecord): LatencyInfo | null {
-  if (record.requestSentAt === undefined || 
-      record.firstTokenAt === undefined ||
-      record.lastTokenAt === undefined) {
+  if (
+    record.requestSentAt === undefined ||
+    record.firstTokenAt === undefined ||
+    record.lastTokenAt === undefined
+  ) {
     return null;
   }
 
   const ttft = record.firstTokenAt - record.requestSentAt;
   const totalDuration = record.lastTokenAt - record.requestSentAt;
-  
+
   const parsed = detectAndParse(record);
   const outputTokens = parsed?.usage?.outputTokens ?? null;
-  
+
   let tpot: number | null = null;
   if (typeof outputTokens === "number" && outputTokens > 0) {
     tpot = (record.lastTokenAt - record.firstTokenAt) / outputTokens;

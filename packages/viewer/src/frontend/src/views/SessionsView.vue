@@ -1,6 +1,9 @@
 <template>
   <div class="container">
-    <div v-if="loading" class="loading"><div class="spinner"></div>Loading...</div>
+    <div v-if="loading" class="loading">
+      <div class="spinner"></div>
+      Loading...
+    </div>
 
     <template v-else-if="error">
       <div class="error-banner">{{ error }}</div>
@@ -10,22 +13,38 @@
       <div class="empty-state">
         <div class="icon">📁</div>
         <p>No sessions found</p>
-        <p style="font-size:12px;margin-top:8px;color:var(--text-secondary)">Trace data is stored in ~/.opencode-trace</p>
-        <p style="font-size:12px;margin-top:4px;color:var(--text-tertiary)">
+        <p
+          style="font-size: 12px; margin-top: 8px; color: var(--text-secondary)"
+        >
+          Trace data is stored in ~/.opencode-trace
+        </p>
+        <p
+          style="font-size: 12px; margin-top: 4px; color: var(--text-tertiary)"
+        >
           Run <code>opencode</code> to start recording sessions
         </p>
       </div>
     </template>
 
     <template v-else>
-      <div class="page-title">Sessions <span class="count">{{ totalCount }}</span></div>
+      <div class="page-title">
+        Sessions <span class="count">{{ totalCount }}</span>
+      </div>
 
       <div class="sessions-controls-bar">
         <div class="view-controls">
           <div class="search-input-container">
             <span class="search-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
               </svg>
             </span>
             <input
@@ -43,14 +62,26 @@
               aria-label="Clear search"
               @click="clearSearch"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
           <label class="sort-label">
             <span class="sort-label-text">Sort:</span>
-            <select class="sort-select" aria-label="Sort sessions" v-model="sortMode" @change="onSortChange">
+            <select
+              class="sort-select"
+              aria-label="Sort sessions"
+              v-model="sortMode"
+              @change="onSortChange"
+            >
               <option value="recent">Recent</option>
               <option value="name_asc">A-Z</option>
               <option value="name_desc">Z-A</option>
@@ -62,33 +93,60 @@
             :class="{ active: batchMode }"
             @click="toggleBatchMode"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M3 6h18M3 12h18M3 18h18" />
             </svg>
-            {{ batchMode ? 'Cancel' : 'Select' }}
+            {{ batchMode ? "Cancel" : "Select" }}
           </button>
           <button
             v-if="batchMode && selectedIds.size > 0"
             class="batch-delete-btn"
             @click="batchDelete"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+              />
             </svg>
             Delete ({{ selectedIds.size }})
           </button>
         </div>
       </div>
 
-      <div v-if="filteredGroups.length === 0 && searchQuery" class="empty-state">
+      <div
+        v-if="filteredGroups.length === 0 && searchQuery"
+        class="empty-state"
+      >
         <div class="icon">🔍</div>
         <p>No sessions match "{{ searchQuery }}"</p>
       </div>
 
       <div v-else class="folder-groups">
-        <div v-for="group in filteredGroups" :key="group.fullPath" class="folder-group">
+        <div
+          v-for="group in filteredGroups"
+          :key="group.fullPath"
+          class="folder-group"
+        >
           <div class="folder-header">
-            <label v-if="batchMode" class="batch-checkbox folder-checkbox" @click.stop>
+            <label
+              v-if="batchMode"
+              class="batch-checkbox folder-checkbox"
+              @click.stop
+            >
               <input
                 type="checkbox"
                 :checked="isFolderAllSelected(group)"
@@ -108,8 +166,16 @@
                 tabindex="0"
                 role="button"
                 :aria-label="`View session ${node.title || node.id}`"
-                @click="batchMode ? toggleSelect(node.id) : router.push(`/session/${node.id}`)"
-                @keydown.enter="batchMode ? toggleSelect(node.id) : router.push(`/session/${node.id}`)"
+                @click="
+                  batchMode
+                    ? toggleSelect(node.id)
+                    : router.push(`/session/${node.id}`)
+                "
+                @keydown.enter="
+                  batchMode
+                    ? toggleSelect(node.id)
+                    : router.push(`/session/${node.id}`)
+                "
               >
                 <div class="session-card-header">
                   <label v-if="batchMode" class="batch-checkbox" @click.stop>
@@ -121,46 +187,82 @@
                   </label>
                   <div class="session-title-row">
                     <div class="session-card-content">
-                      <div class="session-title">{{ node.title || node.id }}</div>
-                      <div v-if="node.title" class="session-id">{{ node.id }}</div>
+                      <div class="session-title">
+                        {{ node.title || node.id }}
+                      </div>
+                      <div v-if="node.title" class="session-id">
+                        {{ node.id }}
+                      </div>
                       <div class="session-meta">
-                        <span class="badge">{{ node.requestCount }} requests</span>
-                        <span v-if="node.createdAt" class="badge">{{ relativeTime(node.createdAt) }}</span>
-                        <span v-if="node.updatedAt" class="badge">updated {{ relativeTime(node.updatedAt) }}</span>
-                        <span v-if="node.children?.length" class="badge">{{ node.children.length }} children</span>
+                        <span class="badge"
+                          >{{ node.requestCount }} requests</span
+                        >
+                        <span v-if="node.createdAt" class="badge">{{
+                          relativeTime(node.createdAt)
+                        }}</span>
+                        <span v-if="node.updatedAt" class="badge"
+                          >updated {{ relativeTime(node.updatedAt) }}</span
+                        >
+                        <span v-if="node.children?.length" class="badge"
+                          >{{ node.children.length }} children</span
+                        >
                       </div>
                     </div>
                   </div>
-                  <div v-if="!batchMode" class="session-card-actions" @click.stop>
+                  <div
+                    v-if="!batchMode"
+                    class="session-card-actions"
+                    @click.stop
+                  >
                     <div class="session-card-more">
                       <button
                         class="session-more-btn"
                         aria-label="More options"
                         :aria-expanded="openMenuId === node.id"
                         @click="toggleMenu(node.id)"
-                      >⋮</button>
-                      <div v-show="openMenuId === node.id" class="session-more-menu">
+                      >
+                        ⋮
+                      </button>
+                      <div
+                        v-show="openMenuId === node.id"
+                        class="session-more-menu"
+                      >
                         <button
                           v-if="node.children?.length"
                           class="dropdown-item"
                           @click="toggleChildren(node.id)"
                         >
-                          <svg 
-                            width="16" 
-                            height="16" 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="currentColor" 
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
                             stroke-width="2"
-                            :class="['subsession-arrow', { 'rotated': expandedChildren.has(node.id) }]"
+                            :class="[
+                              'subsession-arrow',
+                              { rotated: expandedChildren.has(node.id) },
+                            ]"
                           >
                             <path d="m6 9 6 6 6-6" />
                           </svg>
                           subsessions
                         </button>
-                        <button class="dropdown-item danger" @click="deleteSession(node.id)">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        <button
+                          class="dropdown-item danger"
+                          @click="deleteSession(node.id)"
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                          >
+                            <path
+                              d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                            />
                           </svg>
                           Delete
                         </button>
@@ -184,7 +286,9 @@
                   @keydown.enter="router.push(`/session/${child.id}`)"
                 >
                   <div class="session-title">{{ child.title || child.id }}</div>
-                  <div v-if="child.title" class="session-id">{{ child.id }}</div>
+                  <div v-if="child.title" class="session-id">
+                    {{ child.id }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -202,7 +306,10 @@ import { api, apiDelete, apiPost } from "../composables/useApi";
 import { relativeTime, getProjectName, esc } from "../utils/format";
 
 const router = useRouter();
-const showConfirm = inject<(title: string, message: string, onConfirm: () => void) => void>("showConfirm")!;
+const showConfirm =
+  inject<(title: string, message: string, onConfirm: () => void) => void>(
+    "showConfirm",
+  )!;
 const showToast = inject<(message: string, type: string) => void>("showToast")!;
 
 interface TreeNode {
@@ -292,7 +399,10 @@ function groupTreeByFolder(nodes: TreeNode[]): FolderGroup[] {
     }
     map[folder].sessions.push(node);
     const activityTime = node.updatedAt || node.createdAt || null;
-    if (activityTime && (!map[folder].lastActivity || activityTime > map[folder].lastActivity)) {
+    if (
+      activityTime &&
+      (!map[folder].lastActivity || activityTime > map[folder].lastActivity)
+    ) {
       map[folder].lastActivity = activityTime;
     }
   }
@@ -305,7 +415,9 @@ function groupTreeByFolder(nodes: TreeNode[]): FolderGroup[] {
 function sortGroups(groups: FolderGroup[], mode: string): FolderGroup[] {
   const sorted = [...groups];
   if (mode === "recent") {
-    sorted.sort((a, b) => (b.lastActivity || "").localeCompare(a.lastActivity || ""));
+    sorted.sort((a, b) =>
+      (b.lastActivity || "").localeCompare(a.lastActivity || ""),
+    );
   } else if (mode === "created") {
     sorted.sort((a, b) => {
       const aEarliest = a.sessions.reduce((min: string | null, s) => {
@@ -350,7 +462,7 @@ async function deleteSession(id: string) {
       } catch (e) {
         showToast(`Delete failed: ${(e as Error).message}`, "error");
       }
-    }
+    },
   );
 }
 
@@ -370,7 +482,10 @@ function toggleSelect(id: string) {
 }
 
 function isFolderAllSelected(group: FolderGroup): boolean {
-  return group.sessions.length > 0 && group.sessions.every((s) => selectedIds.value.has(s.id));
+  return (
+    group.sessions.length > 0 &&
+    group.sessions.every((s) => selectedIds.value.has(s.id))
+  );
 }
 
 function isFolderIndeterminate(group: FolderGroup): boolean {
@@ -400,14 +515,20 @@ function batchDelete() {
     `Are you sure you want to delete ${ids.length} session${ids.length > 1 ? "s" : ""}? This action cannot be undone.`,
     async () => {
       try {
-        const res = await apiPost<{ deleted: string[]; errors: { sessionId: string; error: string }[] }>(
-          "sessions/batch-delete",
-          { sessionIds: ids },
-        );
+        const res = await apiPost<{
+          deleted: string[];
+          errors: { sessionId: string; error: string }[];
+        }>("sessions/batch-delete", { sessionIds: ids });
         if (res.errors && res.errors.length > 0) {
-          showToast(`${res.deleted.length} deleted, ${res.errors.length} failed`, "error");
+          showToast(
+            `${res.deleted.length} deleted, ${res.errors.length} failed`,
+            "error",
+          );
         } else {
-          showToast(`${res.deleted.length} session${res.deleted.length > 1 ? "s" : ""} deleted`, "success");
+          showToast(
+            `${res.deleted.length} session${res.deleted.length > 1 ? "s" : ""} deleted`,
+            "success",
+          );
         }
         batchMode.value = false;
         selectedIds.value = new Set();
@@ -415,7 +536,7 @@ function batchDelete() {
       } catch (e) {
         showToast(`Batch delete failed: ${(e as Error).message}`, "error");
       }
-    }
+    },
   );
 }
 
@@ -530,7 +651,7 @@ defineExpose({ loadSessions });
 }
 
 .sort-select::after {
-  content: '';
+  content: "";
   position: absolute;
   right: 10px;
   top: 50%;
@@ -716,7 +837,9 @@ defineExpose({ loadSessions });
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
+  transition:
+    background 0.1s,
+    border-color 0.1s;
 }
 
 .batch-toggle-btn:hover {

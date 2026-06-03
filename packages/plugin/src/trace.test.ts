@@ -1,5 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, rmSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import entrypoint, { _resetForTesting } from "./trace.js";
@@ -16,7 +22,10 @@ vi.mock("node:os", async (importOriginal) => {
   };
 });
 
-async function waitForFile(filePath: string, timeoutMs: number = 5000): Promise<void> {
+async function waitForFile(
+  filePath: string,
+  timeoutMs: number = 5000,
+): Promise<void> {
   const startTime = Date.now();
   while (true) {
     if (existsSync(filePath)) {
@@ -26,13 +35,14 @@ async function waitForFile(filePath: string, timeoutMs: number = 5000): Promise<
           JSON.parse(content);
           return;
         }
-      } catch {
-      }
+      } catch {}
     }
     if (Date.now() - startTime > timeoutMs) {
-      throw new Error(`Timeout waiting for valid file ${filePath} after ${timeoutMs}ms`);
+      throw new Error(
+        `Timeout waiting for valid file ${filePath} after ${timeoutMs}ms`,
+      );
     }
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
   }
 }
 
@@ -186,9 +196,13 @@ describe("tracedFetch stream integration", () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = mockFetch;
 
-    const chunks = ["data: {\"content\": \"Hello\"}\n", "data: {\"content\": \"World\"}\n", "data: [DONE]\n"];
+    const chunks = [
+      'data: {"content": "Hello"}\n',
+      'data: {"content": "World"}\n',
+      "data: [DONE]\n",
+    ];
     const encoder = new TextEncoder();
-    const streamChunks = chunks.map(c => encoder.encode(c));
+    const streamChunks = chunks.map((c) => encoder.encode(c));
 
     const mockStream = new ReadableStream({
       start(controller) {
@@ -199,10 +213,12 @@ describe("tracedFetch stream integration", () => {
       },
     });
 
-    mockFetch.mockResolvedValueOnce(new Response(mockStream, {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    }));
+    mockFetch.mockResolvedValueOnce(
+      new Response(mockStream, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+    );
 
     const hooks = await entrypoint.server({
       client: {} as any,
@@ -232,14 +248,20 @@ describe("tracedFetch stream integration", () => {
       } as any,
     });
 
-    const streamRequest = new Request("https://api.example.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-opencode-session": sessionId,
+    const streamRequest = new Request(
+      "https://api.example.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencode-session": sessionId,
+        },
+        body: JSON.stringify({
+          stream: true,
+          messages: [{ role: "user", content: "test" }],
+        }),
       },
-      body: JSON.stringify({ stream: true, messages: [{ role: "user", content: "test" }] }),
-    });
+    );
 
     const response = await globalThis.fetch(streamRequest);
 
@@ -282,10 +304,12 @@ describe("tracedFetch stream integration", () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = mockFetch;
 
-    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ result: "ok" }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }));
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ result: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
 
     const hooks = await entrypoint.server({
       client: {} as any,
@@ -321,7 +345,10 @@ describe("tracedFetch stream integration", () => {
         "content-type": "application/json",
         "x-opencode-session": sessionId,
       },
-      body: JSON.stringify({ stream: false, messages: [{ role: "user", content: "test" }] }),
+      body: JSON.stringify({
+        stream: false,
+        messages: [{ role: "user", content: "test" }],
+      }),
     });
 
     const response = await globalThis.fetch(request);
@@ -374,7 +401,7 @@ describe("Plugin - tool.execute.after hook 处理 Task 工具", () => {
         title: "Task completed",
         output: "success",
         metadata: { session_id: subSessionId },
-      }
+      },
     );
 
     const traceDir = join(testDir, ".opencode-trace");
@@ -422,7 +449,7 @@ describe("Plugin - tool.execute.after hook 处理 Task 工具", () => {
         title: "Command executed",
         output: "file1.txt\nfile2.txt",
         metadata: {},
-      }
+      },
     );
 
     const traceDir = join(testDir, ".opencode-trace");
@@ -461,7 +488,9 @@ describe("Plugin - global/local mode", () => {
       } as any,
     });
 
-    const result = await hooks.tool!.trace_use_global!.execute({}, { sessionID: sessionId } as any);
+    const result = await hooks.tool!.trace_use_global!.execute({}, {
+      sessionID: sessionId,
+    } as any);
     expect(result).toContain("global mode");
 
     const globalDir = join(testDir, ".opencode-trace");
@@ -483,7 +512,7 @@ describe("Plugin - global/local mode", () => {
       } as any,
     });
 
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 100));
     expect(existsSync(sessionDir)).toBe(true);
   });
 
@@ -516,7 +545,9 @@ describe("Plugin - global/local mode", () => {
       } as any,
     });
 
-    const result = await hooks.tool!.trace_use_local!.execute({}, { sessionID: sessionId } as any);
+    const result = await hooks.tool!.trace_use_local!.execute({}, {
+      sessionID: sessionId,
+    } as any);
     expect(result).toContain("local mode");
 
     const localDir = join(testDir, ".opencode-trace");
@@ -538,7 +569,7 @@ describe("Plugin - global/local mode", () => {
       } as any,
     });
 
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 100));
     expect(existsSync(sessionDir)).toBe(true);
   });
 
@@ -571,7 +602,9 @@ describe("Plugin - global/local mode", () => {
       } as any,
     });
 
-    const result = await hooks.tool!.trace_storage_status!.execute({}, { sessionID: sessionId } as any);
+    const result = await hooks.tool!.trace_storage_status!.execute({}, {
+      sessionID: sessionId,
+    } as any);
     const parsed = JSON.parse(result as string);
     expect(parsed.mode).toBeDefined();
     expect(parsed.globalDir).toBeDefined();
