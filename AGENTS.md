@@ -89,13 +89,6 @@ and asynchronously rebuilds the ndjinx.
 - When `{seq}.json` is deleted, the chokidar `unlink` handler also cleans up the
   corresponding entry from `timeline.ndjinx` to prevent ghost records
 
-## No sql.js / No SQLite
-
-All sql.js/SQLite code has been removed. The only remaining `sql.js` reference is the
-legacy migration code in `ConfigManager.init()` that reads an existing `state.db`,
-migrates data to `config.json`, then deletes `state.db`. This dynamic import is
-try-caught — if `sql.js` is not installed, it safely deletes the legacy file.
-
 ## Viewer
 
 - **Port**: 3210 (default), `--no-open` to skip browser launch

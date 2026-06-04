@@ -5,7 +5,6 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  rmSync,
   writeFileSync,
   renameSync,
   statSync,
@@ -75,58 +74,6 @@ export class ConfigManager {
 
   async init(): Promise<void> {
     mkdirSync(this.traceDir, { recursive: true });
-
-    const legacyDbPath = join(this.traceDir, "state.db");
-    if (existsSync(legacyDbPath)) {
-      try {
-        // @ts-expect-error — sql.js is optional; only used for legacy migration from v1
-        const sqlJsModule: any = await import("sql.js");
-        const initSqlJs: any = sqlJsModule.default;
-        const SQL: any = await initSqlJs();
-        const buffer = readFileSync(legacyDbPath);
-        const db = new SQL.Database(buffer);
-        try {
-          const result = db.exec(
-            "SELECT key, value FROM global_state",
-          );
-          if (result.length > 0 && result[0].values.length > 0) {
-            const config = this.readConfig();
-            for (const row of result[0].values) {
-              const key = row[0] as string;
-              const value = row[1] as string | null;
-              if (key === "global_trace_enabled") {
-                config.global_trace_enabled = value === "true";
-              } else if (key === "plugin_enabled") {
-                config.plugin_enabled = value !== "false";
-              } else if (key === "current_session") {
-                config.current_session = value;
-              }
-            }
-            this.writeConfig(config);
-          }
-        } finally {
-          db.close();
-        }
-        try {
-          rmSync(legacyDbPath, { force: true });
-        } catch {
-          // ignore deletion errors
-        }
-        logger.info("Migrated from legacy state.db to config.json", {
-          traceDir: this.traceDir,
-        });
-      } catch (err) {
-        logger.error("Failed to migrate legacy state.db, removing", {
-          traceDir: this.traceDir,
-          error: String(err),
-        });
-        try {
-          rmSync(legacyDbPath, { force: true });
-        } catch {
-          // ignore deletion errors
-        }
-      }
-    }
 
     if (!existsSync(this.configPath)) {
       this.writeConfig({ ...DEFAULT_CONFIG });

@@ -11,10 +11,10 @@ npm install @opencode-trace/core
 ## Features
 
 - **parse** — AI Provider parsers (OpenAI Chat/Responses, Anthropic)
-- **store** — Data persistence (file read/write, SQLite state)
+- **store** — Data persistence (file read/write)
 - **query** — Query building (Timeline, token statistics, latency metrics)
 - **record** — Recording control (global/session switches)
-- **state** — State management (StateManager class)
+- **state** — State management (ConfigManager class)
 - **format** — Format export (XML, Collapse)
 - **schemas** — Zod Schema definitions
 - **transform** — SSE stream parsing

@@ -102,7 +102,7 @@ opencode-trace viewer --no-open    # Don't auto-open browser
 | `--collapse-blocks <types>` | Collapse Block types (text,thinking,td,tc,tr,image,other) |
 | `--port <num>` | Viewer port |
 | `--no-open` | Don't auto-open browser |
-| `--repair` | Rebuild corrupted database |
+| `--repair` | Delete `config.json` and rebuild from filesystem |
 
 ## Examples
 

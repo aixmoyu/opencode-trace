@@ -145,7 +145,6 @@ Tracing data is stored in `~/.opencode-trace/`:
 │   ├── 1.sse              # SSE stream data (if any)
 │   ├── 2.json             # 2nd request record
 │   ├── metadata.json      # Session metadata (title, parent-child relationship)
-├── state.db               # SQLite state database
 ```
 
 ### API Usage (Development Integration)

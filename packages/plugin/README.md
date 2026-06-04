@@ -112,14 +112,6 @@ AI: [calls trace_enable tool] Tracing enabled
 2. Confirm tracing enabled: run `opencode-trace status`
 3. Check directory permissions: ensure `~/.opencode-trace` is writable
 
-### SQLite Corrupted
-
-Run repair command:
-
-```bash
-opencode-trace sync --repair
-```
-
 ## License
 
 MIT
