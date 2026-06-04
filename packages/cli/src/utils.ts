@@ -62,8 +62,19 @@ export function parseFlags(argv: string[]): ParsedFlags {
     const arg = argv[i];
     if (arg === "-s" || arg === "--session") {
       flags.session = true;
-    } else if (arg === "--local") {
+    } else if (arg === "-g" || arg === "--global") {
+      flags.global = true;
+    } else if (arg === "-l" || arg === "--local") {
       flags.local = true;
+    } else if (arg === "-d" || arg === "--dir") {
+      if (i + 1 < argv.length) {
+        const val = argv[++i];
+        if (val !== "global" && val !== "local") {
+          console.error(`Error: Invalid dir value: ${val}. Valid: global, local`);
+          process.exit(1);
+        }
+        flags.dir = val;
+      }
     } else if (arg === "-r" && i + 1 < argv.length) {
       flags.req = argv[++i];
     } else if (arg === "-o" && i + 1 < argv.length) {

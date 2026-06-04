@@ -24,13 +24,14 @@ export class AsyncWriteQueue {
     seq: number;
     record: TraceRecord;
     timelineEntry?: TimelineEntry;
+    traceDir: string;
   }> = [];
   private writing: boolean = false;
-  private traceDir: string;
+  private defaultTraceDir: string;
   private batchSize: number;
 
   constructor(traceDir: string, batchSize: number = 10) {
-    this.traceDir = traceDir;
+    this.defaultTraceDir = traceDir;
     this.batchSize = batchSize;
   }
 
@@ -39,8 +40,9 @@ export class AsyncWriteQueue {
     seq: number,
     record: TraceRecord,
     timelineEntry?: TimelineEntry,
+    traceDir?: string,
   ): void {
-    this.queue.push({ session, seq, record, timelineEntry });
+    this.queue.push({ session, seq, record, timelineEntry, traceDir: traceDir ?? this.defaultTraceDir });
     if (!this.writing) {
       this.processQueue();
     }
@@ -73,15 +75,14 @@ export class AsyncWriteQueue {
       seq: number;
       record: TraceRecord;
       timelineEntry?: TimelineEntry;
+      traceDir: string;
     }>,
   ): Promise<void> {
-    for (const { session, seq, record, timelineEntry } of items) {
+    for (const { session, seq, record, timelineEntry, traceDir } of items) {
       try {
-        const sessionDir = join(this.traceDir, session);
+        const sessionDir = join(traceDir, session);
         await fs.mkdir(sessionDir, { recursive: true });
 
-        // Atomic write: .tmp + rename — crash-safe on POSIX; on Windows rename may
-        // fail transiently (EACCES/EPERM if file is locked by antivirus or still flushing)
         const tmpPath = join(sessionDir, `${seq}.json.tmp`);
         const finalPath = join(sessionDir, `${seq}.json`);
         await fs.writeFile(tmpPath, JSON.stringify(record, null, 2));
@@ -91,7 +92,7 @@ export class AsyncWriteQueue {
           await this.appendTimeline(sessionDir, timelineEntry);
         }
       } catch (err) {
-        await this.writeFallback(session, seq, record, err as Error);
+        await this.writeFallback(session, seq, record, err as Error, traceDir);
       }
     }
   }
@@ -117,10 +118,11 @@ export class AsyncWriteQueue {
   }
 
   /** Fire-and-forget parsed cache write. Never blocks the write queue. */
-  writeParsedCache(session: string, seq: number, parsed: Record<string, unknown>): void {
+  writeParsedCache(session: string, seq: number, parsed: Record<string, unknown>, traceDir?: string): void {
+    const dir = traceDir ?? this.defaultTraceDir;
     setImmediate(async () => {
       try {
-        const sessionDir = join(this.traceDir, session);
+        const sessionDir = join(dir, session);
         await fs.mkdir(sessionDir, { recursive: true });
         const cachePath = join(sessionDir, `${seq}.parsed`);
         await fs.writeFile(cachePath, JSON.stringify(parsed));
@@ -144,8 +146,9 @@ export class AsyncWriteQueue {
     seq: number,
     record: TraceRecord,
     err: Error,
+    traceDir: string,
   ): Promise<void> {
-    const fallbackDir = join(this.traceDir, "fallback");
+    const fallbackDir = join(traceDir, "fallback");
     await fs.mkdir(fallbackDir, { recursive: true });
     const filename = `${session}-${seq}-${Date.now()}.json`;
     await fs.writeFile(

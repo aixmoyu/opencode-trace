@@ -11,33 +11,42 @@ export async function cmdSetEnabled(
 ): Promise<void> {
   const { positional, flags } = parseFlags(args);
 
-  let traceDir: string;
-  let mode: string;
+  const hasGlobal = flags.global === true;
+  const hasLocal = flags.local === true;
+  const hasSession = flags.session === true;
+  const anyScope = hasGlobal || hasLocal || hasSession;
+  const dir = typeof flags.dir === "string" ? flags.dir : "global";
 
-  if (flags.local) {
-    traceDir = LOCAL_TRACE_DIR;
-    mode = "local";
-  } else {
-    traceDir = GLOBAL_TRACE_DIR;
-    mode = "global";
+  const enabled: string[] = [];
+
+  if (hasGlobal || !anyScope) {
+    await record.initStateManager(GLOBAL_TRACE_DIR);
+    record.setGlobalTraceEnabled(enable, GLOBAL_TRACE_DIR);
+    record.setStoragePreference(dir as "global" | "local", GLOBAL_TRACE_DIR);
+    enabled.push("global");
   }
 
-  await record.initStateManager(traceDir);
+  if (hasLocal) {
+    await record.initStateManager(LOCAL_TRACE_DIR);
+    record.setGlobalTraceEnabled(enable, LOCAL_TRACE_DIR);
+    enabled.push("local");
+  }
 
-  if (flags.session) {
+  if (hasSession) {
     const sessionId = positional[0];
     if (!sessionId) {
-      console.error(`Error: session-id is required when using -s`);
+      console.error("Error: session-id is required when using -s");
       process.exit(1);
     }
-    record.setSessionEnabled(sessionId, enable, traceDir);
-    console.log(
-      `Session ${sessionId} ${enable ? "enabled" : "disabled"} in ${mode} mode.`,
-    );
-  } else {
-    record.setGlobalTraceEnabled(enable, traceDir);
-    console.log(
-      `Global trace ${enable ? "enabled" : "disabled"} in ${mode} mode.`,
-    );
+    await record.initStateManager(GLOBAL_TRACE_DIR);
+    record.setSessionEnabled(sessionId, enable, GLOBAL_TRACE_DIR);
+    if (flags.dir) {
+      record.setSessionStoragePreference(sessionId, dir as "global" | "local", GLOBAL_TRACE_DIR);
+    }
+    enabled.push("session");
   }
+
+  const action = enable ? "enabled" : "disabled";
+  const storageInfo = flags.dir ? `, storage: ${dir}` : "";
+  console.log(`Trace ${action} (scope: ${enabled.join(", ")}${storageInfo})`);
 }

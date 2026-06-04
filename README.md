@@ -76,16 +76,88 @@ npx @opencode-trace/viewer
 
 ## Usage
 
+### Trace Control (Slash Commands)
+
+In OpenCode, use `/trace` commands to control recording. These are **user-facing slash commands**:
+
+```bash
+/trace on                     # Enable globally (default)
+/trace on -g                  # Enable globally
+/trace on -l                  # Enable locally (this project folder)
+/trace on -s                  # Enable for current session only
+/trace on -g -l               # Enable global + local
+/trace on -d local            # Enable globally, save to local directory
+/trace on -s -d local         # Enable session, save locally
+
+/trace off                    # Disable globally
+/trace off -l                 # Disable locally
+/trace off -s                 # Disable for current session
+/trace off -g -l -s           # Disable all scopes
+
+/trace status                 # Show all scope statuses
+/trace help                   # Show help
+```
+
+### Trace Control (Agent Tools)
+
+The plugin registers three tools for AI agents to control tracing programmatically.
+Agent tools only operate at the **session** level:
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `trace_on` | Enable trace recording for current session | (none) |
+| `trace_off` | Disable trace recording for current session | (none) |
+| `trace_status` | Show current trace status | (none) |
+
+### Scope & Storage Model
+
+**Scope** controls *whether* tracing is enabled. Three independent scopes:
+
+| Scope | Config Location | Description |
+|-------|----------------|-------------|
+| `global` | `~/.opencode-trace/config.json` | All projects, all sessions |
+| `local` | `<project>/.opencode-trace/config.json` | This project folder only |
+| `session` | Session metadata | Current session only |
+
+**Enable resolution** (largest scope wins):
+```
+global ON  →  tracing is ON (regardless of local/session)
+global OFF →  check local
+  local ON  →  tracing is ON
+  local OFF →  check session
+    session ON  →  tracing is ON
+    session OFF →  tracing is OFF
+```
+
+**Storage** controls *where* traces are saved:
+
+| Storage | Path | Description |
+|---------|------|-------------|
+| `global` | `~/.opencode-trace/` | User home directory (default) |
+| `local` | `<project>/.opencode-trace/` | Project directory |
+
+**Storage resolution** (smallest scope wins):
+```
+session has preference  →  use session preference
+session has no preference →  use global preference (default: global)
+```
+
 ### CLI Commands
 
 ```bash
 # Trace control
-opencode-trace enable              # Enable global tracing
-opencode-trace enable -s <id>      # Enable tracing for specific session
-opencode-trace disable             # Disable global tracing
-opencode-trace disable -s <id>     # Disable tracing for specific session
-opencode-trace status              # View tracing status
-opencode-trace status -s <id>      # View status for specific session
+opencode-trace enable                    # Enable global tracing
+opencode-trace enable -g                 # Enable global tracing
+opencode-trace enable -l                 # Enable local tracing
+opencode-trace enable -s <id>            # Enable tracing for specific session
+opencode-trace enable -g -l              # Enable global + local
+opencode-trace enable -d local           # Enable globally, save locally
+opencode-trace disable                   # Disable global tracing
+opencode-trace disable -l                # Disable local tracing
+opencode-trace disable -s <id>           # Disable tracing for specific session
+opencode-trace disable -g -l -s <id>     # Disable all scopes
+opencode-trace status                    # View global tracing status
+opencode-trace status -g -l -s <id>      # View all scope statuses
 
 # Session management
 opencode-trace list                # List all sessions
@@ -136,15 +208,24 @@ Viewer features:
 
 ### Data Storage
 
-Tracing data is stored in `~/.opencode-trace/`:
+Tracing data is stored in two possible locations:
 
+**Global directory** (`~/.opencode-trace/`):
 ```
 ~/.opencode-trace/
-├── <session-id>/          # Session directory
-│   ├── 1.json             # 1st request record
-│   ├── 1.sse              # SSE stream data (if any)
-│   ├── 2.json             # 2nd request record
-│   ├── metadata.json      # Session metadata (title, parent-child relationship)
+├── config.json              # Global state (scope enable, storage preference)
+├── <session-id>/            # Session directory
+│   ├── 1.json               # 1st request record
+│   ├── 1.sse                # SSE stream data (if any)
+│   ├── 2.json               # 2nd request record
+│   ├── metadata.json        # Session metadata (title, parent-child, trace_enabled, storage_preference)
+```
+
+**Local directory** (`<project>/.opencode-trace/`):
+```
+<project>/.opencode-trace/
+├── config.json              # Local state (scope enable)
+├── <session-id>/            # Session directory (same structure as global)
 ```
 
 ### API Usage (Development Integration)
@@ -154,7 +235,7 @@ import {
   store,    // Data persistence (listSessions, exportSessionZip)
   parse,    // AI Provider parsing (detectAndParse)
   query,    // Query building (buildSessionTimeline)
-  record,   // Recording control (enable, disable)
+  record,   // Recording control (enable, disable, scope, storage)
   state,    // State management (StateManager)
   format,   // Format export (formatAsXML)
   schemas,  // Zod Schema (TraceRecordSchema)

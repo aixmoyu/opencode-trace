@@ -6,11 +6,21 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { TraceRecord, TraceRequest, TraceResponse } from "./trace.js";
 
-
-
-
 export interface TracerConfig {
   globalDir?: string;
+  localDir: string;
+}
+
+export type TraceScope = "global" | "local" | "session";
+export type StorageLocation = "global" | "local";
+
+export interface ScopeStatus {
+  globalEnabled: boolean;
+  localEnabled: boolean;
+  sessionEnabled: boolean | null;
+  effectiveEnabled: boolean;
+  storageLocation: StorageLocation;
+  globalDir: string;
   localDir: string;
 }
 
@@ -21,55 +31,96 @@ export class TracePlugin {
   private interceptorInstalled: boolean = false;
   private globalDir: string;
   private localDir: string;
-  private currentDir: string;
-  private configManager: ConfigManager | null = null;
+  private globalConfigManager: ConfigManager | null = null;
+  private localConfigManager: ConfigManager | null = null;
 
   constructor(config: TracerConfig) {
     if (!config.localDir) {
       throw new TypeError("TracerConfig.localDir is required");
     }
-    this.globalDir = config.globalDir ?? join(homedir(), '.opencode-trace');
+    this.globalDir = config.globalDir ?? join(homedir(), ".opencode-trace");
     this.localDir = config.localDir;
-    this.currentDir = this.globalDir;
     this.origFetch = globalThis.fetch;
-    this.writeQueue = new AsyncWriteQueue(this.currentDir);
+    this.writeQueue = new AsyncWriteQueue(this.globalDir);
   }
 
   async initStateManager(): Promise<void> {
-    this.configManager = new ConfigManager(this.globalDir);
-    await this.configManager.init();
+    this.globalConfigManager = new ConfigManager(this.globalDir);
+    await this.globalConfigManager.init();
+
+    this.localConfigManager = new ConfigManager(this.localDir);
+    await this.localConfigManager.init();
   }
 
   getStateManager(): ConfigManager | null {
-    return this.configManager;
+    return this.globalConfigManager;
   }
 
-  private shouldRecord(sessionId?: string): boolean {
-    if (!this.configManager) return true;
-    return this.configManager.isTraceEnabled(sessionId);
+  getGlobalConfigManager(): ConfigManager | null {
+    return this.globalConfigManager;
   }
 
-  useGlobalDir(): void {
-    this.currentDir = this.globalDir;
-    this.writeQueue = new AsyncWriteQueue(this.currentDir);
+  getLocalConfigManager(): ConfigManager | null {
+    return this.localConfigManager;
   }
 
-  useLocalDir(): void {
-    this.currentDir = this.localDir;
-    this.writeQueue = new AsyncWriteQueue(this.currentDir);
+  resolveTraceDir(sessionId?: string): string {
+    if (sessionId && this.globalConfigManager) {
+      const sessionPref = this.globalConfigManager.getSessionStoragePreference(sessionId);
+      if (sessionPref === "local") return this.localDir;
+      if (sessionPref === "global") return this.globalDir;
+    }
+
+    if (this.globalConfigManager) {
+      const globalPref = this.globalConfigManager.getStoragePreference();
+      if (globalPref === "local") return this.localDir;
+    }
+
+    return this.globalDir;
   }
 
-  getStorageStatus(): {
-    mode: string;
-    globalDir: string;
-    localDir: string;
-    currentDir: string;
-  } {
+  shouldRecord(sessionId?: string): boolean {
+    if (!this.globalConfigManager) return true;
+
+    const globalEnabled = this.globalConfigManager.getGlobalState("global_trace_enabled") === "true";
+    if (globalEnabled) return true;
+
+    if (this.localConfigManager) {
+      const localEnabled = this.localConfigManager.getGlobalState("global_trace_enabled") === "true";
+      if (localEnabled) return true;
+    }
+
+    if (!sessionId) return false;
+
+    return this.globalConfigManager.getSessionEnabled(sessionId);
+  }
+
+  getScopeStatus(sessionId?: string): ScopeStatus {
+    const globalEnabled = this.globalConfigManager
+      ? this.globalConfigManager.getGlobalState("global_trace_enabled") === "true"
+      : false;
+
+    const localEnabled = this.localConfigManager
+      ? this.localConfigManager.getGlobalState("global_trace_enabled") === "true"
+      : false;
+
+    const sessionEnabled = sessionId && this.globalConfigManager
+      ? this.globalConfigManager.getSessionEnabled(sessionId)
+      : null;
+
+    const effectiveEnabled = this.shouldRecord(sessionId);
+
+    const traceDir = this.resolveTraceDir(sessionId);
+    const storageLocation: StorageLocation = traceDir === this.localDir ? "local" : "global";
+
     return {
-      mode: this.currentDir === this.globalDir ? "global" : "local",
+      globalEnabled,
+      localEnabled,
+      sessionEnabled,
+      effectiveEnabled,
+      storageLocation,
       globalDir: this.globalDir,
       localDir: this.localDir,
-      currentDir: this.currentDir,
     };
   }
 
@@ -111,8 +162,8 @@ export class TracePlugin {
         null,
         error,
       );
-      this.writeQueue.enqueue(meta.session, meta.seq, record, timelineEntry);
-      this.writeParsedCacheAsync(meta.session, meta.seq, record);
+      this.writeQueue.enqueue(meta.session, meta.seq, record, timelineEntry, meta.traceDir);
+      this.writeParsedCacheAsync(meta.session, meta.seq, record, meta.traceDir);
       throw err;
     }
 
@@ -136,6 +187,7 @@ export class TracePlugin {
       meta.traceReq,
       res,
       latencyMeta,
+      meta.traceDir,
     );
 
     return res;
@@ -200,11 +252,14 @@ export class TracePlugin {
     isStream: boolean;
     purpose: string;
     traceReq: TraceRequest;
+    traceDir: string;
   } | null> {
     const session = this.getSessionId(req);
     if (session === undefined) return null;
 
     if (!this.shouldRecord(session)) return null;
+
+    const traceDir = this.resolveTraceDir(session);
 
     const seq = (this.ids.get(session) ?? 0) + 1;
     this.ids.set(session, seq);
@@ -249,6 +304,7 @@ export class TracePlugin {
       isStream,
       purpose,
       traceReq,
+      traceDir,
     };
   }
 
@@ -293,7 +349,9 @@ export class TracePlugin {
       firstTokenAt?: number | null;
       lastTokenAt?: number | null;
     },
+    traceDir?: string,
   ): Promise<void> {
+    const dir = traceDir ?? this.globalDir;
     try {
       const resBodyText = await res.clone().text();
       const resBody = this.parseBody(resBodyText);
@@ -328,8 +386,8 @@ export class TracePlugin {
         traceRes,
         null,
       );
-      this.writeQueue.enqueue(session, seq, record, timelineEntry);
-      this.writeParsedCacheAsync(session, seq, record);
+      this.writeQueue.enqueue(session, seq, record, timelineEntry, dir);
+      this.writeParsedCacheAsync(session, seq, record, dir);
     } catch (err) {
       const error =
         err instanceof Error
@@ -360,8 +418,8 @@ export class TracePlugin {
         null,
         error,
       );
-      this.writeQueue.enqueue(session, seq, record, timelineEntry);
-      this.writeParsedCacheAsync(session, seq, record);
+      this.writeQueue.enqueue(session, seq, record, timelineEntry, dir);
+      this.writeParsedCacheAsync(session, seq, record, dir);
     }
   }
 
@@ -452,25 +510,25 @@ export class TracePlugin {
       lastTokenAt: latency?.lastTokenAt ?? undefined,
     };
   }
-  private writeParsedCacheAsync(session: string, seq: number, record: TraceRecord): void {
+
+  private writeParsedCacheAsync(session: string, seq: number, record: TraceRecord, traceDir?: string): void {
     setImmediate(() => {
       try {
         const parsed = parse.detectAndParse(record as Parameters<typeof parse.detectAndParse>[0]);
         this.writeQueue.writeParsedCache(session, seq, {
           ...(parsed as unknown as Record<string, unknown>),
           _pcv: parse.PARSED_CACHE_VERSION,
-        });
+        }, traceDir);
       } catch {
         // fail silently — parsed cache is optional
       }
     });
   }
 
-
-  /** Flush the write queue — wait for all pending writes to complete. */
   async flush(): Promise<void> {
     await this.writeQueue.flush();
   }
+
   wrap(fetch: typeof globalThis.fetch): typeof fetch {
     const capturedOrig = fetch;
     return async (input, init) => this.tracedFetch(input, init, capturedOrig);

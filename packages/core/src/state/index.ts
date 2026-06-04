@@ -22,7 +22,8 @@ export interface SessionState {
   title?: string;
   parentID?: string;
   subSessions?: string[];
-  enabled?: boolean;
+  trace_enabled?: boolean;
+  storage_preference?: "global" | "local";
   folderPath?: string;
 }
 
@@ -30,7 +31,8 @@ export interface SessionMetadata {
   title?: string;
   parentID?: string;
   subSessions?: string[];
-  enabled?: boolean;
+  trace_enabled?: boolean;
+  storage_preference?: "global" | "local";
   folderPath?: string;
   startedAt?: string;
 }
@@ -46,6 +48,7 @@ const CURRENT_SCHEMA_VERSION = 2;
 
 interface ConfigFile {
   global_trace_enabled: boolean;
+  storage_preference: "global" | "local";
   plugin_enabled: boolean;
   current_session: string | null;
   schema_version: number;
@@ -53,6 +56,7 @@ interface ConfigFile {
 
 const DEFAULT_CONFIG: ConfigFile = {
   global_trace_enabled: false,
+  storage_preference: "global",
   plugin_enabled: true,
   current_session: null,
   schema_version: CURRENT_SCHEMA_VERSION,
@@ -95,6 +99,7 @@ export class ConfigManager {
           parsed.global_trace_enabled,
           DEFAULT_CONFIG.global_trace_enabled,
         ),
+        storage_preference: normalizeStoragePreference(parsed.storage_preference),
         plugin_enabled: normalizeBoolean(
           parsed.plugin_enabled,
           DEFAULT_CONFIG.plugin_enabled,
@@ -149,6 +154,8 @@ export class ConfigManager {
     const config = this.readConfig();
     if (key === "global_trace_enabled") {
       config.global_trace_enabled = value === "true";
+    } else if (key === "storage_preference") {
+      config.storage_preference = normalizeStoragePreference(value);
     } else if (key === "plugin_enabled") {
       config.plugin_enabled = value !== "false";
     } else if (key === "current_session") {
@@ -406,18 +413,45 @@ export class ConfigManager {
     if (metadata.startedAt !== undefined) {
       updated.startedAt = metadata.startedAt;
     }
+    if (metadata.trace_enabled !== undefined) {
+      updated.trace_enabled = metadata.trace_enabled;
+    }
+    if (metadata.storage_preference !== undefined) {
+      updated.storage_preference = metadata.storage_preference;
+    }
 
     this.writeMetadataFile(sessionId, updated);
   }
 
   setSessionEnabled(sessionId: string, enabled: boolean): void {
     const existing = this.readMetadataFile(sessionId);
-    this.writeMetadataFile(sessionId, { ...existing, enabled });
+    this.writeMetadataFile(sessionId, { ...existing, trace_enabled: enabled });
   }
 
   getSessionEnabled(sessionId: string): boolean {
     const metadata = this.readMetadataFile(sessionId);
-    return metadata.enabled ?? true;
+    return metadata.trace_enabled ?? true;
+  }
+
+  setSessionStoragePreference(sessionId: string, preference: "global" | "local"): void {
+    const existing = this.readMetadataFile(sessionId);
+    this.writeMetadataFile(sessionId, { ...existing, storage_preference: preference });
+  }
+
+  getSessionStoragePreference(sessionId: string): "global" | "local" | null {
+    const metadata = this.readMetadataFile(sessionId);
+    return metadata.storage_preference ?? null;
+  }
+
+  getStoragePreference(): "global" | "local" {
+    if (!this.configCache) {
+      this.configCache = this.readConfig();
+    }
+    return this.configCache.storage_preference;
+  }
+
+  setStoragePreference(preference: "global" | "local"): void {
+    this.setGlobalState("storage_preference", preference);
   }
 
   isTraceEnabled(sessionId?: string): boolean {
@@ -447,6 +481,11 @@ function normalizeBoolean(value: unknown, defaultValue: boolean): boolean {
   if (value === "true") return true;
   if (value === "false") return false;
   return defaultValue;
+}
+
+function normalizeStoragePreference(value: unknown): "global" | "local" {
+  if (value === "local") return "local";
+  return "global";
 }
 
 export type StateManager = ConfigManager;

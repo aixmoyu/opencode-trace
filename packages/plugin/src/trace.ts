@@ -5,11 +5,11 @@ import type {
   PluginInput,
   Config as PluginConfig,
 } from "@opencode-ai/plugin";
+import { tool } from "@opencode-ai/plugin";
 import type { Event, Session, Part } from "@opencode-ai/sdk";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { logger } from "@opencode-trace/core";
-import { ConfigManager } from "@opencode-trace/core/state";
 import { TracePlugin } from "./plugin-instance.js";
 
 export interface TraceRequest {
@@ -46,6 +46,19 @@ export function _resetForTesting(): void {
     testPlugin.uninstallInterceptor();
     testPlugin = null;
   }
+}
+
+function formatStatus(instance: TracePlugin, sessionId?: string): string {
+  const status = instance.getScopeStatus(sessionId);
+  const lines = [
+    `Trace Status:`,
+    `  Global  : ${status.globalEnabled ? "ON" : "OFF"}`,
+    `  Local   : ${status.localEnabled ? "ON" : "OFF"}`,
+    `  Session : ${status.sessionEnabled === null ? "not set" : status.sessionEnabled ? "ON" : "OFF"}`,
+    `  Effective: ${status.effectiveEnabled ? "RECORDING" : "PAUSED"}`,
+    `  Storage : ${status.storageLocation} (${status.storageLocation === "global" ? status.globalDir : status.localDir})`,
+  ];
+  return lines.join("\n");
 }
 
 const plugin: Plugin = async (input: PluginInput) => {
@@ -108,90 +121,139 @@ const plugin: Plugin = async (input: PluginInput) => {
         }
       }
     },
+
     config: async (input: PluginConfig) => {
       input.command = input.command ?? {};
       input.command["trace"] = {
         template: "",
-        description: "Enable/disable trace recording via /trace <on|off|status>",
+        description: "Control trace recording: /trace <on|off|status> [-g] [-l] [-s] [-d global|local]",
       };
     },
 
     "command.execute.before": async (
-      input: { command: string; sessionID: string; arguments: string; },
-      output: { parts: Part[]; },
+      input: { command: string; sessionID: string; arguments: string },
+      output: { parts: Part[] },
     ) => {
       if (input.command !== "trace") return;
       if (!instance.getStateManager()) return;
 
       const tokens = input.arguments.split(/\s+/).filter(Boolean);
-      const isLocal = tokens.includes("-l");
-      const cmd = tokens.filter((t: string) => t !== "-l")[0]?.toLowerCase();
+      const cmd = tokens[0]?.toLowerCase();
 
-      let result: string;
+      const hasGlobal = tokens.includes("-g") || tokens.includes("--global");
+      const hasLocal = tokens.includes("-l") || tokens.includes("--local");
+      const hasSession = tokens.includes("-s") || tokens.includes("--session");
+      const dirIdx = tokens.findIndex((t) => t === "-d" || t === "--dir");
+      const dir = dirIdx >= 0 ? tokens[dirIdx + 1]?.toLowerCase() : undefined;
+
+      const anyScope = hasGlobal || hasLocal || hasSession;
+
+      let result = "";
 
       try {
         const sm = instance.getStateManager()!;
-        const storage = instance.getStorageStatus();
+        const localCm = instance.getLocalConfigManager();
 
         if (!cmd || cmd === "help") {
           result = [
-            "Usage: /trace <on|off> [-l]",
+            "Usage: /trace <on|off|status> [-g] [-l] [-s] [-d global|local]",
             "",
-            "  on         Enable trace recording (global by default)",
-            "  off        Disable trace recording (global by default)",
-            "  -l         Operate on local storage instead of global",
-            "  status     Show current trace status",
+            "Commands:",
+            "  on      Enable trace recording",
+            "  off     Disable trace recording",
+            "  status  Show current trace status",
             "",
-            "If global and local are both enabled, records are saved locally.",
+            "Scope flags (can combine multiple):",
+            "  -g, --global   Global scope (all projects, all sessions)",
+            "  -l, --local    Local scope (this project folder)",
+            "  -s, --session  Session scope (current session only)",
+            "  (default: -g if no scope flag given)",
+            "",
+            "Storage flag:",
+            "  -d, --dir <global|local>  Where to save traces (default: global)",
+            "",
+            "Scope resolution (enable):",
+            "  global > local > session  (largest scope wins)",
+            "  If global is ON, tracing is ON regardless of local/session.",
+            "  If global is OFF, check local; if local is OFF, check session.",
+            "",
+            "Storage resolution (save location):",
+            "  session > global  (smallest scope wins)",
+            "  If session has a storage preference, use it.",
+            "  Otherwise fall back to global preference (default: global).",
             "",
             "Examples:",
-            "  /trace on          Enable trace globally",
-            "  /trace on -l       Enable trace locally",
-            "  /trace off         Disable trace globally",
-            "  /trace off -l      Disable trace locally",
+            "  /trace on                     Enable globally (default)",
+            "  /trace on -l                  Enable locally",
+            "  /trace on -s                  Enable for this session",
+            "  /trace on -g -l               Enable global + local",
+            "  /trace on -d local            Enable globally, save locally",
+            "  /trace on -s -d local         Enable session, save locally",
+            "  /trace off                    Disable globally",
+            "  /trace off -l                 Disable locally",
+            "  /trace off -g -l -s           Disable all scopes",
+            "  /trace status                 Show status",
           ].join("\n");
         } else if (cmd === "on" || cmd === "enable") {
-          if (isLocal) {
-            const localConfig = new ConfigManager(storage.localDir);
-            await localConfig.init();
-            localConfig.setGlobalState("global_trace_enabled", "true");
-            instance.useLocalDir();
-            result = "opencode-trace: Trace enabled (local)";
-          } else {
+          const targetDir = dir || "global";
+          const enabled: string[] = [];
+
+          if (hasGlobal || !anyScope) {
             sm.setGlobalState("global_trace_enabled", "true");
-            result = "opencode-trace: Trace enabled (global)";
+            sm.setGlobalState("storage_preference", targetDir);
+            enabled.push("global");
+          }
+          if (hasLocal) {
+            if (!localCm) {
+              result = "Local config not available";
+            } else {
+              localCm.setGlobalState("global_trace_enabled", "true");
+              enabled.push("local");
+            }
+          }
+          if (hasSession) {
+            sm.setSessionEnabled(input.sessionID, true);
+            if (dir) {
+              sm.setSessionStoragePreference(input.sessionID, targetDir as "global" | "local");
+            }
+            enabled.push("session");
+          }
+
+          if (!result) {
+            result = `Trace enabled (scope: ${enabled.join(", ")}${dir ? `, storage: ${targetDir}` : ""})`;
           }
         } else if (cmd === "off" || cmd === "disable") {
-          if (isLocal) {
-            const localConfig = new ConfigManager(storage.localDir);
-            await localConfig.init();
-            localConfig.setGlobalState("global_trace_enabled", "false");
-            result = "opencode-trace: Trace disabled (local)";
-          } else {
+          const disabled: string[] = [];
+
+          if (hasGlobal || !anyScope) {
             sm.setGlobalState("global_trace_enabled", "false");
-            result = "opencode-trace: Trace disabled (global)";
+            disabled.push("global");
+          }
+          if (hasLocal) {
+            if (!localCm) {
+              result = "Local config not available";
+            } else {
+              localCm.setGlobalState("global_trace_enabled", "false");
+              disabled.push("local");
+            }
+          }
+          if (hasSession) {
+            sm.setSessionEnabled(input.sessionID, false);
+            disabled.push("session");
+          }
+
+          if (!result) {
+            result = `Trace disabled (scope: ${disabled.join(", ")})`;
           }
         } else if (cmd === "status") {
-          const globalEnabled = sm.getGlobalState("global_trace_enabled") === "true";
-          let localEnabled = false;
-          try {
-            const localConfig = new ConfigManager(storage.localDir);
-            await localConfig.init();
-            localEnabled = localConfig.getGlobalState("global_trace_enabled") === "true";
-          } catch { /* local dir may not exist */ }
-          result = [
-            `opencode-trace: global=${globalEnabled ? "ON" : "OFF"}`,
-            `opencode-trace: local=${localEnabled ? "ON" : "OFF"}`,
-            `opencode-trace: storage=${storage.mode}`,
-          ].join("\n");
+          result = formatStatus(instance, input.sessionID);
         } else {
-          result = `opencode-trace: Unknown option: ${cmd}`;
+          result = `Unknown command: ${cmd}. Use /trace on, /trace off, or /trace status.`;
         }
       } catch (err) {
-        result = `opencode-trace: Error: ${err instanceof Error ? err.message : String(err)}`;
+        result = `Error: ${err instanceof Error ? err.message : String(err)}`;
       }
 
-      // Send noreply result (following DCP sendIgnoredMessage pattern)
       try {
         await client.session.prompt({
           path: { id: input.sessionID },
@@ -201,109 +263,56 @@ const plugin: Plugin = async (input: PluginInput) => {
           },
         });
       } catch (err) {
-        // Log but don't block — the command must still be consumed
         logger.error("Failed to send trace command response", { error: String(err) });
       }
 
-      // Clear parts so original command doesn't reach LLM
       output.parts.length = 0;
-
-      // Signal "handled" to stop the command pipeline (DCP pattern)
       throw new Error("__TRACE_HANDLED__");
     },
 
     tool: {
-      trace_enable: {
+      trace_on: tool({
         description:
-          "Enable trace recording for the current session. When global trace is disabled, only enabled sessions will be recorded.",
+          "Enable trace recording for the current session.",
         args: {},
         execute: async (_, context) => {
           if (!instance.getStateManager()) {
             return "StateManager not initialized";
           }
-          instance
-            .getStateManager()!
-            .setSessionEnabled(context.sessionID, true);
+
+          const sm = instance.getStateManager()!;
+          sm.setSessionEnabled(context.sessionID, true);
           return `Trace enabled for session ${context.sessionID}`;
         },
-      },
-      trace_disable: {
+      }),
+
+      trace_off: tool({
         description:
-          "Disable trace recording for the current session. This session will not be recorded even if global trace is enabled.",
+          "Disable trace recording for the current session.",
         args: {},
         execute: async (_, context) => {
           if (!instance.getStateManager()) {
             return "StateManager not initialized";
           }
-          instance
-            .getStateManager()!
-            .setSessionEnabled(context.sessionID, false);
+
+          const sm = instance.getStateManager()!;
+          sm.setSessionEnabled(context.sessionID, false);
           return `Trace disabled for session ${context.sessionID}`;
         },
-      },
-      trace_status: {
+      }),
+
+      trace_status: tool({
         description:
-          "Check the trace recording status for the current session. Shows both global and session-level status.",
+          "Show current trace recording status across all scopes (global, local, session) " +
+          "and the effective recording state and storage location.",
         args: {},
         execute: async (_, context) => {
           if (!instance.getStateManager()) {
             return "StateManager not initialized";
           }
-          const globalEnabled =
-            instance
-              .getStateManager()!
-              .getGlobalState("global_trace_enabled") === "true";
-          const sessionEnabled = instance
-            .getStateManager()!
-            .getSessionEnabled(context.sessionID);
-          const willRecord = instance
-            .getStateManager()!
-            .isTraceEnabled(context.sessionID);
-          return JSON.stringify(
-            {
-              globalEnabled,
-              sessionEnabled,
-              willRecord,
-              sessionId: context.sessionID,
-            },
-            null,
-            2,
-          );
+          return formatStatus(instance, context.sessionID);
         },
-      },
-      trace_use_global: {
-        description:
-          "Switch to global storage mode. Traces will be saved to ~/.opencode-trace (default).",
-        args: {},
-        execute: async (_, context) => {
-          if (!instance.getStateManager()) {
-            return "StateManager not initialized";
-          }
-          instance.useGlobalDir();
-          return `Switched to global mode. Traces will be saved to ~/.opencode-trace`;
-        },
-      },
-      trace_use_local: {
-        description:
-          "Switch to local storage mode. Traces will be saved to .opencode-trace in the current directory.",
-        args: {},
-        execute: async (_, context) => {
-          if (!instance.getStateManager()) {
-            return "StateManager not initialized";
-          }
-          instance.useLocalDir();
-          return `Switched to local mode. Traces will be saved to ./.opencode-trace`;
-        },
-      },
-      trace_storage_status: {
-        description:
-          "Check current storage mode (global or local) and directories.",
-        args: {},
-        execute: async (_, context) => {
-          const status = instance.getStorageStatus();
-          return JSON.stringify(status, null, 2);
-        },
-      },
+      }),
     },
   };
 

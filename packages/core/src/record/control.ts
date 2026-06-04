@@ -128,6 +128,50 @@ export function shouldRecord(sessionId?: string, traceDir?: string): boolean {
   return true;
 }
 
+export function setStoragePreference(
+  preference: "global" | "local",
+  traceDir?: string,
+): void {
+  const dir = resolveDir(traceDir);
+  const manager = getManagerSync(dir);
+  if (manager) {
+    manager.setStoragePreference(preference);
+  }
+}
+
+export function getStoragePreference(traceDir?: string): "global" | "local" {
+  const dir = resolveDir(traceDir);
+  const manager = getManagerSync(dir);
+  if (manager) {
+    return manager.getStoragePreference();
+  }
+  return "global";
+}
+
+export function setSessionStoragePreference(
+  sessionId: string,
+  preference: "global" | "local",
+  traceDir?: string,
+): void {
+  const dir = resolveDir(traceDir);
+  const manager = getManagerSync(dir);
+  if (manager) {
+    manager.setSessionStoragePreference(sessionId, preference);
+  }
+}
+
+export function getSessionStoragePreference(
+  sessionId: string,
+  traceDir?: string,
+): "global" | "local" | null {
+  const dir = resolveDir(traceDir);
+  const manager = getManagerSync(dir);
+  if (manager) {
+    return manager.getSessionStoragePreference(sessionId);
+  }
+  return null;
+}
+
 export function isRecording(sessionId: string, traceDir?: string): boolean {
   const dir = resolveDir(traceDir);
   const manager = getManagerSync(dir);

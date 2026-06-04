@@ -429,7 +429,7 @@ describe("ConfigManager - Trace Enable/Disable", () => {
     manager.setSessionEnabled(sessionId, false);
 
     const session = manager.getSession(sessionId);
-    expect(session?.enabled).toBe(false);
+    expect(session?.trace_enabled).toBe(false);
   });
 });
 

@@ -4,37 +4,40 @@ import { parseFlags, GLOBAL_TRACE_DIR, LOCAL_TRACE_DIR } from "../utils.js";
 export async function cmdStatus(args: string[]): Promise<void> {
   const { positional, flags } = parseFlags(args);
 
-  let traceDir: string;
-  let mode: string;
+  const hasGlobal = flags.global === true;
+  const hasLocal = flags.local === true;
+  const hasSession = flags.session === true;
+  const anyScope = hasGlobal || hasLocal || hasSession;
 
-  if (flags.local) {
-    traceDir = LOCAL_TRACE_DIR;
-    mode = "local";
-  } else {
-    traceDir = GLOBAL_TRACE_DIR;
-    mode = "global";
+  const status: Record<string, unknown> = {};
+
+  if (hasGlobal || !anyScope) {
+    await record.initStateManager(GLOBAL_TRACE_DIR);
+    status.global = {
+      enabled: record.getGlobalTraceEnabled(GLOBAL_TRACE_DIR),
+      storage: record.getStoragePreference(GLOBAL_TRACE_DIR),
+    };
   }
 
-  await record.initStateManager(traceDir);
+  if (hasLocal) {
+    await record.initStateManager(LOCAL_TRACE_DIR);
+    status.local = {
+      enabled: record.getGlobalTraceEnabled(LOCAL_TRACE_DIR),
+    };
+  }
 
-  const status: {
-    mode?: string;
-    globalEnabled?: boolean;
-    sessionEnabled?: boolean;
-    sessionId?: string;
-  } = { mode };
-
-  if (flags.session) {
+  if (hasSession) {
     const sessionId = positional[0];
     if (!sessionId) {
       console.error("Error: session-id is required when using -s");
       process.exit(1);
     }
-    status.globalEnabled = record.getGlobalTraceEnabled(traceDir);
-    status.sessionEnabled = record.getSessionEnabled(sessionId, traceDir);
-    status.sessionId = sessionId;
-  } else {
-    status.globalEnabled = record.getGlobalTraceEnabled(traceDir);
+    await record.initStateManager(GLOBAL_TRACE_DIR);
+    status.session = {
+      id: sessionId,
+      enabled: record.getSessionEnabled(sessionId, GLOBAL_TRACE_DIR),
+      storage: record.getSessionStoragePreference(sessionId, GLOBAL_TRACE_DIR),
+    };
   }
 
   console.log(JSON.stringify(status, null, 2));

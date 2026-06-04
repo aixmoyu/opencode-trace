@@ -127,3 +127,158 @@ and asynchronously rebuilds the ndjinx.
 
 - Loaded via OpenCode plugin system (`@opencode-ai/plugin` SDK)
 - Core module re-exported from `.` (not `./dist/index.js` — actual entry is `./dist/trace.js`)
+
+## Trace Enable/Disable Logic (Scope & Storage)
+
+### Scope Model
+
+Three independent scopes control whether tracing is enabled:
+
+| Scope | Config Location | Description |
+|-------|----------------|-------------|
+| `global` | `~/.opencode-trace/config.json` → `global_trace_enabled` | All projects, all sessions |
+| `local` | `<project>/.opencode-trace/config.json` → `global_trace_enabled` | This project folder only |
+| `session` | Session `metadata.json` → `trace_enabled` | Current session only |
+
+### Enable Resolution (largest scope wins)
+
+```
+global_trace_enabled === true  →  tracing is ON (regardless of local/session)
+global_trace_enabled === false →  check local
+  local global_trace_enabled === true  →  tracing is ON
+  local global_trace_enabled === false →  check session
+    session trace_enabled === true  →  tracing is ON
+    session trace_enabled === false →  tracing is OFF
+    session trace_enabled === null  →  tracing is OFF (default)
+```
+
+Implemented in `TracePlugin.shouldRecord(sessionId)` in `packages/plugin/src/plugin-instance.ts`.
+
+### Storage Model
+
+Two storage locations:
+
+| Storage | Path | Description |
+|---------|------|-------------|
+| `global` | `~/.opencode-trace/` | User home directory (default) |
+| `local` | `<project>/.opencode-trace/` | Project directory |
+
+### Storage Resolution (smallest scope wins)
+
+```
+session has storage_preference  →  use session preference
+session has no preference       →  use global config storage_preference (default: "global")
+```
+
+Implemented in `TracePlugin.resolveTraceDir(sessionId)` in `packages/plugin/src/plugin-instance.ts`.
+
+### Config File Format
+
+**Global config** (`~/.opencode-trace/config.json`):
+```json
+{
+  "global_trace_enabled": false,
+  "storage_preference": "global",
+  "plugin_enabled": true,
+  "current_session": null,
+  "schema_version": 1
+}
+```
+
+**Local config** (`<project>/.opencode-trace/config.json`):
+```json
+{
+  "global_trace_enabled": false,
+  "storage_preference": "global",
+  "plugin_enabled": true,
+  "current_session": null,
+  "schema_version": 1
+}
+```
+
+**Session metadata** (`<trace-dir>/<session-id>/metadata.json`):
+```json
+{
+  "title": "Session Title",
+  "parentID": null,
+  "subSessions": [],
+  "trace_enabled": null,
+  "storage_preference": null,
+  "folderPath": "/path/to/project",
+  "startedAt": "2024-01-01T00:00:00Z"
+}
+```
+
+### User Commands (Slash Commands)
+
+`/trace` is a slash command for users to control recording:
+
+```
+/trace on [-g] [-l] [-s] [-d global|local]
+/trace off [-g] [-l] [-s]
+/trace status
+/trace help
+```
+
+Scope flags (can combine multiple):
+- `-g`, `--global` — Global scope (all projects, all sessions)
+- `-l`, `--local` — Local scope (this project folder)
+- `-s`, `--session` — Session scope (current session only)
+- Default: `-g` if no scope flag given
+
+Storage flag:
+- `-d`, `--dir <global|local>` — Where to save traces (default: global)
+
+### Agent Tools
+
+Three tools registered for AI agents. Agent tools only operate at the **session** level:
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `trace_on` | (none) | Enable tracing for current session |
+| `trace_off` | (none) | Disable tracing for current session |
+| `trace_status` | (none) | Show all scope statuses and effective state |
+
+### StateManager API (packages/core/src/state/index.ts)
+
+Key methods for scope/storage management:
+
+```typescript
+class ConfigManager {
+  // Global state
+  getGlobalState(key: string): string
+  setGlobalState(key: string, value: string): void
+
+  // Session state
+  getSessionEnabled(sessionId: string): boolean
+  setSessionEnabled(sessionId: string, enabled: boolean): void
+
+  // Storage preference
+  getStoragePreference(): "global" | "local"
+  setStoragePreference(pref: "global" | "local"): void
+  getSessionStoragePreference(sessionId: string): "global" | "local" | null
+  setSessionStoragePreference(sessionId: string, pref: "global" | "local"): void
+
+  // Combined check
+  isTraceEnabled(sessionId?: string): boolean
+}
+```
+
+### Record Control API (packages/core/src/record/control.ts)
+
+Exported functions for external use:
+
+```typescript
+// Scope enable/disable
+setGlobalTraceEnabled(enabled: boolean, traceDir?: string): void
+getGlobalTraceEnabled(traceDir?: string): boolean
+setSessionEnabled(sessionId: string, enabled: boolean, traceDir?: string): void
+getSessionEnabled(sessionId: string, traceDir?: string): boolean
+shouldRecord(sessionId?: string, traceDir?: string): boolean
+
+// Storage preference
+setStoragePreference(pref: "global" | "local", traceDir?: string): void
+getStoragePreference(traceDir?: string): "global" | "local"
+setSessionStoragePreference(sessionId: string, pref: "global" | "local", traceDir?: string): void
+getSessionStoragePreference(sessionId: string, traceDir?: string): "global" | "local" | null
+```

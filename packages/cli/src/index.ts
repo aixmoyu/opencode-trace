@@ -15,12 +15,20 @@ Usage:
   opencode-trace <command> [options]
 
 Commands:
-  enable [-s] [session-id]        Enable trace (global by default)
-                                  -s: enable specific session
-  disable [-s] [session-id]       Disable trace (global by default)
-                                  -s: disable specific session
-  status [-s] [session-id]        Show trace status (global by default)
-                                  -s: show specific session status
+  enable [-g] [-l] [-s <id>] [-d global|local]
+                                  Enable trace recording
+                                  -g, --global: enable global scope (default)
+                                  -l, --local:  enable local scope
+                                  -s, --session <id>: enable session scope
+                                  -d, --dir <global|local>: storage location
+  disable [-g] [-l] [-s <id>]     Disable trace recording
+                                  -g, --global: disable global scope (default)
+                                  -l, --local:  disable local scope
+                                  -s, --session <id>: disable session scope
+  status [-g] [-l] [-s <id>]      Show trace status
+                                  -g, --global: show global scope (default)
+                                  -l, --local:  show local scope
+                                  -s, --session <id>: show session scope
   list                            List all sessions
                                   Shows: session-id, title, created, updated
   show <session-id> metadata      Show session metadata
@@ -71,14 +79,14 @@ async function main() {
   if (command === "--help" || command === "-h") {
     console.error("Usage: opencode-trace <command> [options]");
     console.error("Commands:");
-    console.error("  enable [--session <id>]  - Enable trace recording");
-    console.error("  disable [--session <id>] - Disable trace recording");
-    console.error("  status [--session <id>]  - Show trace status");
-    console.error("  list                     - List all sessions");
-    console.error("  sync [--repair]          - Sync trace data");
-    console.error("  viewer [options]         - Start web viewer");
-    console.error("  show <type> <session>    - Show trace data");
-    console.error("  export <type> <session>  - Export trace data");
+    console.error("  enable [-g] [-l] [-s <id>] [-d global|local]  - Enable trace recording");
+    console.error("  disable [-g] [-l] [-s <id>]                    - Disable trace recording");
+    console.error("  status [-g] [-l] [-s <id>]                     - Show trace status");
+    console.error("  list                                            - List all sessions");
+    console.error("  sync [--repair]                                 - Sync trace data");
+    console.error("  viewer [options]                                - Start web viewer");
+    console.error("  show <type> <session>                           - Show trace data");
+    console.error("  export <type> <session>                         - Export trace data");
     process.exit(0);
   }
 
