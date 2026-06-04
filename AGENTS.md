@@ -42,6 +42,33 @@ npx tsc --noEmit        # type-check all packages (CI lint job)
 - **Publishing order** (CI): core → cli → plugin → viewer. Skips if version already published.
 - No eslint, prettier, or formatter config exists in this repo.
 
+## Windows CI Compatibility (IMPORTANT)
+
+This project runs CI on both Linux and Windows. File system behavior differs significantly:
+
+### MUST Follow
+- **`fs.rename()` is NOT atomic on Windows (NTFS)**. Unlike POSIX, Windows rename can fail
+  with `EACCES`/`EPERM` if the destination is locked (antivirus, delayed flush). All rename
+  operations in this project use `safeRename()` with retry logic (3 retries, exponential backoff).
+  NEVER use bare `fs.rename()` for `.tmp → final` atomic write patterns — always use `safeRename()`.
+- **Test file polling MUST match assertion filters**. `waitForFiles()` and similar helpers must
+  use the SAME file filter regex as the assertion (e.g. `/^\d+\.json$/`). Using `.endsWith(".json")`
+  counts `metadata.json` and can cause early return with fewer record files than expected, especially
+  on slow Windows CI where writes take longer.
+- **Always flush before assertions**. After async writes, call `plugin.flush()` (or equivalent)
+  before reading the filesystem. Windows I/O is slower and NTFS metadata caching means `readdirSync`
+  may not immediately reflect completed writes.
+- **Test timeouts on Windows need margin**. The default `waitForFiles` timeout (5s) is sufficient
+  but tight on Windows CI. If tests become flaky, increase rather than decrease.
+
+### MUST NOT Do
+- **NEVER use bare `fs.rename()` for production write paths**. Always use `safeRename()` from
+  `AsyncWriteQueue` which retries on Windows transient lock errors.
+- **NEVER use `.endsWith(".json")` to count record files in tests**. This matches `metadata.json`,
+  `config.json`, and other non-record files. Use `/^\d+\.json$/` or a specific regex.
+- **NEVER assume file writes are immediately visible in directory listings on Windows**. Always
+  flush the write queue and poll for file appearance before asserting file counts.
+
 ## Architecture Principles
 
 ### File System is Source of Truth

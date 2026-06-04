@@ -467,6 +467,10 @@ export class TracePlugin {
   }
 
 
+  /** Flush the write queue — wait for all pending writes to complete. */
+  async flush(): Promise<void> {
+    await this.writeQueue.flush();
+  }
   wrap(fetch: typeof globalThis.fetch): typeof fetch {
     const capturedOrig = fetch;
     return async (input, init) => this.tracedFetch(input, init, capturedOrig);

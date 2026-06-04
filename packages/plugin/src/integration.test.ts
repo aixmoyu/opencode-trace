@@ -18,7 +18,7 @@ async function waitForFiles(
   const startTime = Date.now();
   while (true) {
     if (existsSync(dir)) {
-      const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
+      const files = readdirSync(dir).filter((f) => /^\d+\.json$/.test(f));
       if (files.length >= count) {
         let allValid = true;
         for (const file of files) {
@@ -84,8 +84,9 @@ describe("Integration: TracePlugin full flow", () => {
     const responses = await Promise.all(requests);
     expect(responses.every((r) => r.status === 200)).toBe(true);
 
+    await plugin.flush();
+
     const sessionDir = join(tempDir, sessionId);
-    await waitForFiles(sessionDir, 5);
 
     const files = readdirSync(sessionDir)
       .filter((f) => /^\d+\.json$/.test(f))

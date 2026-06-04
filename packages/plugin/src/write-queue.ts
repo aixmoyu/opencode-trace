@@ -80,17 +80,38 @@ export class AsyncWriteQueue {
         const sessionDir = join(this.traceDir, session);
         await fs.mkdir(sessionDir, { recursive: true });
 
-        // Atomic write: .tmp + rename — crash-safe, POSIX rename guarantees atomicity
+        // Atomic write: .tmp + rename — crash-safe on POSIX; on Windows rename may
+        // fail transiently (EACCES/EPERM if file is locked by antivirus or still flushing)
         const tmpPath = join(sessionDir, `${seq}.json.tmp`);
         const finalPath = join(sessionDir, `${seq}.json`);
         await fs.writeFile(tmpPath, JSON.stringify(record, null, 2));
-        await fs.rename(tmpPath, finalPath);
+        await this.safeRename(tmpPath, finalPath);
 
         if (timelineEntry) {
           await this.appendTimeline(sessionDir, timelineEntry);
         }
       } catch (err) {
         await this.writeFallback(session, seq, record, err as Error);
+      }
+    }
+  }
+  /**
+   * Retry rename on Windows transient errors (EACCES, EPERM).
+   * On POSIX rename is atomic and never fails for this reason.
+   * On Windows, antivirus or delayed flush can cause transient lock errors.
+   */
+  private async safeRename(src: string, dest: string, retries: number = 3): Promise<void> {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await fs.rename(src, dest);
+        return;
+      } catch (err: unknown) {
+        const code = (err as NodeJS.ErrnoException)?.code;
+        if ((code === "EACCES" || code === "EPERM") && i < retries - 1) {
+          await new Promise((r) => setTimeout(r, 50 * (i + 1)));
+          continue;
+        }
+        throw err;
       }
     }
   }
