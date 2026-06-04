@@ -42,10 +42,9 @@ describe("TracePlugin", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  test("constructor initializes write and state queues", () => {
+  test("constructor initializes write queue", () => {
     expect(plugin).toBeDefined();
     expect(plugin["writeQueue"]).toBeDefined();
-    expect(plugin["stateQueue"]).toBeDefined();
   });
 
   test("installInterceptor installs traced fetch", () => {

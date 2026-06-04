@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { StateManager } from "./index.js";
+import { ConfigManager } from "./index.js";
 
 let testDir: string;
 
@@ -21,29 +21,34 @@ afterEach(() => {
   rmSync(testDir, { recursive: true, force: true });
 });
 
-describe("StateManager - 初始化", () => {
-  test("空目录初始化创建 state.db", async () => {
-    const manager = new StateManager(testDir);
+describe("ConfigManager - 初始化", () => {
+  test("空目录初始化创建 config.json", async () => {
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
-    expect(existsSync(join(testDir, "state.db"))).toBe(true);
+    expect(existsSync(join(testDir, "config.json"))).toBe(true);
   });
 
-  test("初始化后 global_state 表有默认值", async () => {
-    const manager = new StateManager(testDir);
+  test("初始化后 global_trace_enabled 默认为 false", async () => {
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
-    const currentSession = manager.getGlobalState("current_session");
-    expect(currentSession).toBeNull();
+    const globalEnabled = manager.getGlobalState("global_trace_enabled");
+    expect(globalEnabled).toBe("false");
+  });
+
+  test("初始化后 plugin_enabled 默认为 true", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
 
     const pluginEnabled = manager.getGlobalState("plugin_enabled");
     expect(pluginEnabled).toBe("true");
   });
 });
 
-describe("StateManager - Session 状态管理", () => {
+describe("ConfigManager - Session 状态管理", () => {
   test("startSession 创建活跃 session", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -56,19 +61,18 @@ describe("StateManager - Session 状态管理", () => {
     expect(session?.requestCount).toBe(0);
   });
 
-  test("stopSession 更改状态为 stopped", async () => {
-    const manager = new StateManager(testDir);
+  test("stopSession 清除 current_session", async () => {
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
     manager.stopSession(sessionId);
 
-    const session = manager.getSession(sessionId);
-    expect(session?.status).toBe("stopped");
+    expect(manager.getActiveSession()).toBeNull();
   });
 
   test("getActiveSession 返回当前活跃 session", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -80,9 +84,9 @@ describe("StateManager - Session 状态管理", () => {
   });
 });
 
-describe("StateManager - 文件系统同步", () => {
-  test("sync 从文件系统恢复孤儿 session", async () => {
-    const manager = new StateManager(testDir);
+describe("ConfigManager - 文件系统扫描", () => {
+  test("从文件系统发现孤儿 session", async () => {
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = "manual-session-123";
@@ -107,32 +111,23 @@ describe("StateManager - 文件系统同步", () => {
       }),
     );
 
-    manager.sync();
-
     const session = manager.getSession(sessionId);
     expect(session?.id).toBe(sessionId);
     expect(session?.requestCount).toBe(1);
   });
 
-  test("sync 清理 SQLite 中但文件不存在的 session", async () => {
-    const manager = new StateManager(testDir);
+  test("文件不存在的 session 返回 null", async () => {
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
-    const sessionId = manager.startSession();
-    manager.stopSession(sessionId);
-
-    rmSync(join(testDir, sessionId), { recursive: true, force: true });
-
-    manager.sync();
-
-    const session = manager.getSession(sessionId);
+    const session = manager.getSession("nonexistent");
     expect(session).toBeNull();
   });
 });
 
-describe("StateManager - 记录写入", () => {
-  test("writeRecord 创建 JSON 文件并更新索引", async () => {
-    const manager = new StateManager(testDir);
+describe("ConfigManager - 记录写入", () => {
+  test("writeRecord 创建 JSON 文件", async () => {
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -154,7 +149,7 @@ describe("StateManager - 记录写入", () => {
   });
 
   test("writeRecord handles URLs with special characters", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
     const sessionId = manager.startSession();
 
@@ -178,11 +173,11 @@ describe("StateManager - 记录写入", () => {
   });
 });
 
-describe("StateManager - 优雅降级", () => {
-  test("SQLite 不可用时降级到纯文件模式", async () => {
-    writeFileSync(join(testDir, "state.db"), "corrupted data");
+describe("ConfigManager - 优雅降级", () => {
+  test("损坏的 config.json 时降级到默认值", async () => {
+    writeFileSync(join(testDir, "config.json"), "corrupted data");
 
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = "fallback-session";
@@ -193,9 +188,9 @@ describe("StateManager - 优雅降级", () => {
   });
 });
 
-describe("StateManager - listSessions", () => {
+describe("ConfigManager - listSessions", () => {
   test("返回按时间排序的 session 列表", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const session1 = manager.startSession();
@@ -211,9 +206,9 @@ describe("StateManager - listSessions", () => {
   });
 });
 
-describe("StateManager - Session 元数据管理", () => {
+describe("ConfigManager - Session 元数据管理", () => {
   test("updateSessionMetadata 创建 metadata.json 文件", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -223,7 +218,7 @@ describe("StateManager - Session 元数据管理", () => {
   });
 
   test("updateSessionMetadata 写入 title 到 metadata.json", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -235,7 +230,7 @@ describe("StateManager - Session 元数据管理", () => {
   });
 
   test("updateSessionMetadata 写入 parentID 到 metadata.json", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const parentSessionId = manager.startSession();
@@ -251,7 +246,7 @@ describe("StateManager - Session 元数据管理", () => {
   });
 
   test("getSession 从 metadata.json 读取 title", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -262,7 +257,7 @@ describe("StateManager - Session 元数据管理", () => {
   });
 
   test("addSubSession 更新 parent 的 metadata.json", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const parentSessionId = manager.startSession();
@@ -276,7 +271,7 @@ describe("StateManager - Session 元数据管理", () => {
   });
 
   test("addSubSession 重复添加不会重复记录", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const parentSessionId = manager.startSession();
@@ -291,7 +286,7 @@ describe("StateManager - Session 元数据管理", () => {
   });
 
   test("getSession 从 metadata.json 读取 subSessions", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const parentSessionId = manager.startSession();
@@ -304,7 +299,7 @@ describe("StateManager - Session 元数据管理", () => {
   });
 
   test("metadata.json 不存在时 getSession 返回默认值", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -316,7 +311,7 @@ describe("StateManager - Session 元数据管理", () => {
   });
 
   test("updateSessionMetadata 写入 folderPath 到 metadata.json", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -330,7 +325,7 @@ describe("StateManager - Session 元数据管理", () => {
   });
 
   test("getSession 从 metadata.json 读取 folderPath", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -343,9 +338,9 @@ describe("StateManager - Session 元数据管理", () => {
   });
 });
 
-describe("StateManager - Trace Enable/Disable", () => {
+describe("ConfigManager - Trace Enable/Disable", () => {
   test("初始化后 global_trace_enabled 默认为 false", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const globalEnabled = manager.getGlobalState("global_trace_enabled");
@@ -353,7 +348,7 @@ describe("StateManager - Trace Enable/Disable", () => {
   });
 
   test("setGlobalState 可以关闭 global_trace_enabled", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     manager.setGlobalState("global_trace_enabled", "false");
@@ -363,7 +358,7 @@ describe("StateManager - Trace Enable/Disable", () => {
   });
 
   test("setSessionEnabled 可以设置 session 级别开关", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -374,7 +369,7 @@ describe("StateManager - Trace Enable/Disable", () => {
   });
 
   test("getSessionEnabled 默认返回 true", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -384,7 +379,7 @@ describe("StateManager - Trace Enable/Disable", () => {
   });
 
   test("isTraceEnabled 全局开时返回 true", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     manager.setGlobalState("global_trace_enabled", "true");
@@ -394,7 +389,7 @@ describe("StateManager - Trace Enable/Disable", () => {
   });
 
   test("isTraceEnabled 全局关 + session 开时返回 true", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     manager.setGlobalState("global_trace_enabled", "false");
@@ -406,7 +401,7 @@ describe("StateManager - Trace Enable/Disable", () => {
   });
 
   test("isTraceEnabled 全局关 + session 关时返回 false", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     manager.setGlobalState("global_trace_enabled", "false");
@@ -418,7 +413,7 @@ describe("StateManager - Trace Enable/Disable", () => {
   });
 
   test("isTraceEnabled 全局关 + 无 session 时返回 false", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     manager.setGlobalState("global_trace_enabled", "false");
@@ -427,7 +422,7 @@ describe("StateManager - Trace Enable/Disable", () => {
   });
 
   test("getSession 返回 enabled 字段", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -438,9 +433,9 @@ describe("StateManager - Trace Enable/Disable", () => {
   });
 });
 
-describe("StateManager - listSessions folderPath", () => {
+describe("ConfigManager - listSessions folderPath", () => {
   test("listSessions 从 metadata.json 读取 folderPath", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
@@ -455,9 +450,9 @@ describe("StateManager - listSessions folderPath", () => {
   });
 });
 
-describe("StateManager - async writeRecord", () => {
+describe("ConfigManager - async writeRecord", () => {
   test("writeRecord is async and uses fs.promises", async () => {
-    const manager = new StateManager(testDir);
+    const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();

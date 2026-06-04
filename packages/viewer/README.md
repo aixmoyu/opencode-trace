@@ -27,14 +27,29 @@ opencode-trace-viewer
 opencode-trace viewer
 ```
 
-After starting, browser automatically opens (default http://localhost:3000).
+```bash
+# Start Viewer with custom trace directory
+opencode-trace-viewer --trace-dir /path/to/traces
+
+# Start Viewer
+npx @opencode-trace/viewer
+
+# Or (if globally installed)
+opencode-trace-viewer
+
+# Or (via CLI)
+opencode-trace viewer
+```
+
+After starting, browser automatically opens (default http://localhost:3210).
 
 ### Options
 
 | Option | Description |
 |--------|-------------|
-| `--port <num>` | Specify port (default 3000) |
+| `--port <num>` | Specify port (default 3210) |
 | `--no-open` | Don't auto-open browser |
+| `--trace-dir <path>` | Read trace data from custom directory (default `~/.opencode-trace`) |
 
 ## Features
 

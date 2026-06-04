@@ -77,8 +77,8 @@ describe("--local flag", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("local");
 
-    const localDb = join(testDir, ".opencode-trace", "state.db");
-    expect(existsSync(localDb)).toBe(true);
+    const localConfig = join(testDir, ".opencode-trace", "config.json");
+    expect(existsSync(localConfig)).toBe(true);
   });
 
   it("enable without --local saves to global directory", () => {
@@ -92,8 +92,8 @@ describe("--local flag", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("local");
 
-    const localDb = join(testDir, ".opencode-trace", "state.db");
-    expect(existsSync(localDb)).toBe(true);
+    const localConfig = join(testDir, ".opencode-trace", "config.json");
+    expect(existsSync(localConfig)).toBe(true);
   });
 
   it("status --local shows local status", () => {

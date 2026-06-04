@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { getTraceDir } from "../platform.js";
-import { StateManager, SessionState } from "../state/index.js";
+import { ConfigManager, SessionState } from "../state/index.js";
 import { logger } from "../logger.js";
 
 const RECORDING_MARKER = ".recording";
@@ -16,12 +16,12 @@ function resolveDir(traceDir?: string): string {
   return traceDir ?? getTraceDir();
 }
 
-const managers = new Map<string, StateManager>();
+const managers = new Map<string, ConfigManager>();
 const initPromises = new Map<string, Promise<void>>();
 
-async function getManager(traceDir: string): Promise<StateManager> {
+async function getManager(traceDir: string): Promise<ConfigManager> {
   if (!managers.has(traceDir)) {
-    const manager = new StateManager(traceDir);
+    const manager = new ConfigManager(traceDir);
     managers.set(traceDir, manager);
     initPromises.set(traceDir, manager.init());
   }
@@ -29,7 +29,7 @@ async function getManager(traceDir: string): Promise<StateManager> {
   return managers.get(traceDir)!;
 }
 
-function getManagerSync(traceDir: string): StateManager | null {
+function getManagerSync(traceDir: string): ConfigManager | null {
   return managers.get(traceDir) ?? null;
 }
 
@@ -213,6 +213,6 @@ export function syncState(traceDir?: string): void {
   const dir = resolveDir(traceDir);
   const manager = getManagerSync(dir);
   if (manager) {
-    manager.sync();
+    manager.reloadConfig();
   }
 }

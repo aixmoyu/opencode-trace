@@ -22,6 +22,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
+    "debug:plugin:create": "node ../../scripts/test-plugin.mjs create",
+    "debug:plugin:remove": "node ../../scripts/test-plugin.mjs remove",
     "test:watch": "vitest watch",
     "clean": "node ../../scripts/clean.mjs"
   },

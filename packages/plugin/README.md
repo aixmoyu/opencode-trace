@@ -78,13 +78,14 @@ Trace data storage structure:
 
 ```
 ~/.opencode-trace/
+├── config.json            # Global state (trace_enabled, current_session)
 ├── <session-id>/          # Session directory
 │   ├── 1.json             # 1st request record
 │   ├── 1.sse              # SSE stream data
+│   ├── 1.parsed           # Parsed conversation cache
 │   ├── 2.json             # 2nd request record
-│   ├── metadata.json      # Session metadata
-├── state.db               # SQLite state database
-```
+│   ├── timeline.ndjson    # Summary index (fast viewer reads)
+│   └── metadata.json      # Session metadata
 
 ## Tools
 

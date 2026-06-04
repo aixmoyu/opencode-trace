@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, writeFileSync, promises as fs } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
@@ -6,6 +6,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
+import chokidar from "chokidar";
 import {
   store,
   parse,
@@ -67,6 +68,11 @@ export interface ViewerInstance {
   close: () => Promise<void>;
 }
 
+interface SSEClient {
+  id: string;
+  reply: any;
+}
+
 export async function createViewer(
   options?: ViewerOptions,
 ): Promise<ViewerInstance> {
@@ -74,6 +80,32 @@ export async function createViewer(
   const globalDir = options?.globalDir ?? options?.traceDir ?? getTraceDir();
   const localDir = options?.localDir ?? options?.traceDir;
   const bothDirsOpts = { globalDir, localDir };
+
+  const sseClients = new Set<SSEClient>();
+
+  // SSE keep-alive heartbeat — prevents proxies from closing idle connections
+  const sseKeepAlive = setInterval(() => {
+    for (const client of sseClients) {
+      try {
+        client.reply.raw.write(": heartbeat\n\n");
+      } catch {
+        sseClients.delete(client);
+      }
+    }
+  }, 15000);
+
+  let clientIdCounter = 0;
+
+  function broadcastSSE(event: string, data: unknown): void {
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const client of sseClients) {
+      try {
+        client.reply.raw.write(payload);
+      } catch {
+        sseClients.delete(client);
+      }
+    }
+  }
 
   function findSessionTraceDir(sessionId: string): string | null {
     if (localDir) {
@@ -165,6 +197,58 @@ export async function createViewer(
         reply.code(404);
         return { error: "Session not found" };
       }
+
+      const timelineEntries = store.readTimelineIndex(sessionId, {
+        traceDir: sessionTraceDir,
+      });
+
+      if (timelineEntries.length > 0) {
+        // Build timeline records from ndjinx + parsed cache (same pattern as /metadata)
+        // This avoids a full JSON scan + detectAndParse for every record.
+        type TLConv = ReturnType<typeof parse.detectAndParse>;
+        const timelineRecords: {
+          id: number;
+          requestAt?: string;
+          parsed: TLConv;
+        }[] = [];
+
+        for (const entry of timelineEntries) {
+          const cached = store.getCachedParsed(sessionId, entry.seq, {
+            traceDir: sessionTraceDir,
+          });
+          if (cached) {
+            timelineRecords.push({
+              id: entry.seq,
+              requestAt: entry.requestAt,
+              parsed: cached as unknown as TLConv,
+            });
+          } else {
+            const rec = store.getRecord(sessionId, entry.seq, {
+              traceDir: sessionTraceDir,
+            });
+            if (rec) {
+              const parsed = parse.detectAndParse(rec);
+              timelineRecords.push({
+                id: rec.id,
+                requestAt: rec.requestAt,
+                parsed,
+              });
+            }
+          }
+        }
+
+        const timeline = query.buildSessionTimeline(
+          sessionId,
+          timelineRecords,
+        );
+        const recordMeta = timelineRecords.map((r) => ({
+          id: r.id,
+          model: r.parsed.model,
+          provider: r.parsed.provider,
+        }));
+        return { ...timeline, recordMeta };
+      }
+
       const records = store.getSessionRecords(sessionId, {
         traceDir: sessionTraceDir,
       });
@@ -204,6 +288,40 @@ export async function createViewer(
         .filter(
           (c) => c.parsed.provider !== "unknown" || c.parsed.msgs.length > 0,
         );
+
+      // Fire-and-forget rebuild timeline.ndjson from full-parse results
+      // so subsequent requests use the fast ndjson path
+      const ndjsonSessionDir = join(sessionTraceDir, sessionId);
+      const ndjsonLines: string[] = [];
+      for (const rec of records) {
+        try {
+          ndjsonLines.push(JSON.stringify({
+            seq: rec.id,
+            url: rec.request.url,
+            method: rec.request.method,
+            purpose: rec.purpose,
+            requestAt: rec.requestAt,
+            responseAt: rec.responseAt,
+            status: rec.response?.status ?? 0,
+            provider: parse.detectProvider(rec.request.url, rec.request.body),
+            model: null,
+            inputTokens: null,
+            outputTokens: null,
+            totalDurationMs: null,
+          }));
+        } catch {
+          // skip records that can't be serialized
+        }
+      }
+      setImmediate(async () => {
+        try {
+          if (ndjsonLines.length > 0) {
+            await fs.writeFile(join(ndjsonSessionDir, "timeline.ndjson"), ndjsonLines.join("\n") + "\n");
+          }
+        } catch {
+          // rebuild is optional
+        }
+      });
       const timeline = query.buildSessionTimeline(sessionId, parsedRecords);
       const recordMeta = parsedRecords.map((r) => ({
         id: r.id,
@@ -227,18 +345,56 @@ export async function createViewer(
         reply.code(404);
         return { error: "Session not found" };
       }
-      const records = store.getSessionRecords(sessionId, {
+
+      // Read timeline.ndjson for record list + basic timing data
+      const timelineEntries = store.readTimelineIndex(sessionId, {
         traceDir: sessionTraceDir,
       });
-      const parsedRecords = records
-        .map((rec) => ({
-          id: rec.id,
-          record: rec,
-          parsed: parse.detectAndParse(rec),
-        }))
-        .filter(
-          (c) => c.parsed.provider !== "unknown" || c.parsed.msgs.length > 0,
-        );
+
+      type MetaConversation = ReturnType<typeof parse.detectAndParse>;
+      interface MetaRecord {
+        id: number;
+        record?: import("@opencode-trace/core").TraceRecord;
+        parsed: MetaConversation;
+      }
+      const metaRecords: MetaRecord[] = [];
+
+      if (timelineEntries.length > 0) {
+        // Use ndjson + parsed cache — no full JSON scan + parse
+        for (const entry of timelineEntries) {
+          const cached = store.getCachedParsed(sessionId, entry.seq, {
+            traceDir: sessionTraceDir,
+          });
+          if (cached) {
+            metaRecords.push({
+              id: entry.seq,
+              record: undefined,
+              parsed: cached as unknown as MetaConversation,
+            });
+          } else {
+            const rec = store.getRecord(sessionId, entry.seq, {
+              traceDir: sessionTraceDir,
+            });
+            if (rec) {
+              const parsed = parse.detectAndParse(rec);
+              metaRecords.push({ id: entry.seq, record: rec, parsed });
+            }
+          }
+        }
+      } else {
+        // No ndjson — full fallback (legacy sessions before this upgrade)
+        const records = store.getSessionRecords(sessionId, {
+          traceDir: sessionTraceDir,
+        });
+        for (const rec of records) {
+          const parsed = parse.detectAndParse(rec);
+          metaRecords.push({ id: rec.id, record: rec, parsed });
+        }
+      }
+
+      const filtered = metaRecords.filter(
+        (r) => r.parsed.provider !== "unknown" || r.parsed.msgs.length > 0,
+      );
 
       const sessions = store.listSessionsFromBothDirs(bothDirsOpts);
       const sessionMeta = sessions.find((s) => s.id === sessionId);
@@ -248,7 +404,7 @@ export async function createViewer(
 
       const metadata = query.buildSessionMetadata(
         sessionId,
-        parsedRecords,
+        filtered,
         sessionMeta?.folderPath,
       );
 
@@ -271,6 +427,12 @@ export async function createViewer(
       if (rid === null) return;
       const sessionTraceDir = validateSessionAndFindDir(reply, sessionId);
       if (sessionTraceDir === null) return;
+
+      const cached = store.getCachedParsed(sessionId, rid, {
+        traceDir: sessionTraceDir,
+      });
+      if (cached) return cached;
+
       const rec = store.getRecord(sessionId, rid, {
         traceDir: sessionTraceDir,
       });
@@ -428,6 +590,27 @@ export async function createViewer(
     return { traceDir: globalDir, localDir };
   });
 
+  app.get("/api/events", async (req, reply) => {
+    const clientId = String(++clientIdCounter);
+    const client: SSEClient = { id: clientId, reply };
+
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    reply.raw.write(`event: connected\ndata: {"clientId":"${clientId}"}\n\n`);
+
+    sseClients.add(client);
+
+
+    req.raw.on("close", () => {
+      sseClients.delete(client);
+    });
+  });
+
   app.post<{ Params: { sessionId: string } }>(
     "/api/sessions/:sessionId/export",
     async (req, reply) => {
@@ -563,6 +746,96 @@ export async function createViewer(
     }
   });
 
+  const watchDirs = [globalDir];
+  if (localDir && localDir !== globalDir) {
+    watchDirs.push(localDir);
+  }
+
+  const watcher = chokidar.watch(watchDirs, {
+    ignored: /(\.tmp$|\.parsed$)/,
+    persistent: true,
+    ignoreInitial: true,
+    depth: 2,
+  });
+
+  watcher.on("add", (filePath) => {
+    const match = filePath.match(/\/([^/]+)\/(\d+)\.json$/);
+    if (match) {
+      const sessionId = match[1];
+      const seq = parseInt(match[2], 10);
+      broadcastSSE("record:added", { sessionId, seq });
+    }
+  });
+
+  watcher.on("change", (filePath) => {
+    const match = filePath.match(/\/([^/]+)\/(\d+)\.json$/);
+    if (match) {
+      const sessionId = match[1];
+      const seq = parseInt(match[2], 10);
+      broadcastSSE("record:updated", { sessionId, seq });
+    }
+  });
+
+  watcher.on("unlink", (filePath) => {
+    const match = filePath.match(/\/([^/]+)\/(\d+)\.json$/);
+    if (match) {
+      const sessionId = match[1];
+      const seq = parseInt(match[2], 10);
+
+      // Clean up the ndjinx entry so the timeline fast path doesn't show ghost
+      // records pointing to deleted JSON files.
+      const sessionDir = dirname(filePath);
+      const ndjinxPath = join(sessionDir, "timeline.ndjinx");
+      try {
+        if (existsSync(ndjinxPath)) {
+          const raw = readFileSync(ndjinxPath, "utf-8");
+          const lines = raw
+            .split("\n")
+            .filter((l) => {
+              if (!l.trim()) return false;
+              try {
+                return JSON.parse(l).seq !== seq;
+              } catch {
+                return false;
+              }
+            });
+          writeFileSync(ndjinxPath, lines.join("\n") + "\n");
+        }
+      } catch {
+        // ndjinx cleanup is best-effort
+      }
+
+      broadcastSSE("record:deleted", { sessionId, seq });
+    }
+  });
+
+  watcher.on("addDir", (dirPath) => {
+    const match = dirPath.match(/\/([^/]+)$/);
+    if (match) {
+      const sessionId = match[1];
+      // Validate it's a real session dir (has at least one JSON file or metadata)
+      if (/^\d+\.json$/.test(sessionId)) return; // not a session dir (it's a record number match)
+      try {
+        const files = readdirSync(dirPath);
+        const hasRecord = files.some((f) => /^\d+\.json$/.test(f));
+        const hasMeta = files.some((f) => f === "metadata.json");
+        if (hasRecord || hasMeta) {
+          broadcastSSE("session:created", { sessionId });
+        }
+      } catch {
+        // best-effort validation
+      }
+    }
+  });
+
+  watcher.on("unlinkDir", (dirPath) => {
+    const match = dirPath.match(/\/([^/]+)$/);
+    if (match) {
+      const sessionId = match[1];
+      broadcastSSE("session:deleted", { sessionId });
+    }
+  });
+
   await app.listen({ port, host: "0.0.0.0" });
 
   const addr = `http://localhost:${port}`;
@@ -581,6 +854,10 @@ export async function createViewer(
 
   return {
     url: addr,
-    close: () => app.close(),
+    close: async () => {
+      clearInterval(sseKeepAlive);
+      await watcher.close();
+      await app.close();
+    },
   };
 }

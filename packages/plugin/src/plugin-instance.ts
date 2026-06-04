@@ -1,19 +1,16 @@
-import { AsyncWriteQueue } from "./write-queue.js";
-import { AsyncStateQueue } from "./state-queue.js";
-import { StateManager } from "@opencode-trace/core/state";
+import { AsyncWriteQueue, TimelineEntry } from "./write-queue.js";
 import { redactHeaders } from "./redact.js";
-import { sanitizePath } from "@opencode-trace/core";
+import { sanitizePath, parse, logger } from "@opencode-trace/core";
+import { ConfigManager } from "@opencode-trace/core/state";
 import { homedir } from "node:os";
 import { join } from "node:path";
-
-import { logger } from "@opencode-trace/core";
 import type { TraceRecord, TraceRequest, TraceResponse } from "./trace.js";
 
 
+
+
 export interface TracerConfig {
-  /** Global trace storage directory. Defaults to ~/.opencode-trace */
   globalDir?: string;
-  /** Project-level trace storage directory. Must be provided by caller */
   localDir: string;
 }
 
@@ -21,12 +18,11 @@ export class TracePlugin {
   private origFetch: typeof fetch;
   private ids: Map<string, number> = new Map();
   private writeQueue: AsyncWriteQueue;
-  private stateQueue: AsyncStateQueue;
-  private stateManager: StateManager | null = null;
   private interceptorInstalled: boolean = false;
   private globalDir: string;
   private localDir: string;
   private currentDir: string;
+  private configManager: ConfigManager | null = null;
 
   constructor(config: TracerConfig) {
     if (!config.localDir) {
@@ -34,10 +30,23 @@ export class TracePlugin {
     }
     this.globalDir = config.globalDir ?? join(homedir(), '.opencode-trace');
     this.localDir = config.localDir;
-    this.currentDir = this.globalDir; // Default to global
-    this.origFetch = globalThis.fetch; // Will be updated in installInterceptor
+    this.currentDir = this.globalDir;
+    this.origFetch = globalThis.fetch;
     this.writeQueue = new AsyncWriteQueue(this.currentDir);
-    this.stateQueue = new AsyncStateQueue();
+  }
+
+  async initStateManager(): Promise<void> {
+    this.configManager = new ConfigManager(this.globalDir);
+    await this.configManager.init();
+  }
+
+  getStateManager(): ConfigManager | null {
+    return this.configManager;
+  }
+
+  private shouldRecord(sessionId?: string): boolean {
+    if (!this.configManager) return true;
+    return this.configManager.isTraceEnabled(sessionId);
   }
 
   useGlobalDir(): void {
@@ -93,8 +102,17 @@ export class TracePlugin {
         error,
         { requestSentAt: meta.requestSentAt },
       );
-      this.writeQueue.enqueue(meta.session, meta.seq, record);
-      this.stateQueue.enqueue(meta.session, meta.seq, record);
+      const timelineEntry = this.buildTimelineEntry(
+        meta.session,
+        meta.seq,
+        meta.purpose,
+        meta.requestAt,
+        meta.traceReq,
+        null,
+        error,
+      );
+      this.writeQueue.enqueue(meta.session, meta.seq, record, timelineEntry);
+      this.writeParsedCacheAsync(meta.session, meta.seq, record);
       throw err;
     }
 
@@ -130,12 +148,6 @@ export class TracePlugin {
       req.headers.get("session_id") ??
       undefined
     );
-  }
-
-  private shouldRecord(sessionId?: string): boolean {
-    if (!this.stateManager) return true;
-    this.stateManager.reload();
-    return this.stateManager.isTraceEnabled(sessionId);
   }
 
   private parseBody(text: string): unknown {
@@ -307,8 +319,17 @@ export class TracePlugin {
         null,
         normalizedLatency,
       );
-      this.writeQueue.enqueue(session, seq, record);
-      this.stateQueue.enqueue(session, seq, record);
+      const timelineEntry = this.buildTimelineEntry(
+        session,
+        seq,
+        purpose,
+        requestAt,
+        traceReq,
+        traceRes,
+        null,
+      );
+      this.writeQueue.enqueue(session, seq, record, timelineEntry);
+      this.writeParsedCacheAsync(session, seq, record);
     } catch (err) {
       const error =
         err instanceof Error
@@ -330,9 +351,71 @@ export class TracePlugin {
         error,
         normalizedLatency,
       );
-      this.writeQueue.enqueue(session, seq, record);
-      this.stateQueue.enqueue(session, seq, record);
+      const timelineEntry = this.buildTimelineEntry(
+        session,
+        seq,
+        purpose,
+        requestAt,
+        traceReq,
+        null,
+        error,
+      );
+      this.writeQueue.enqueue(session, seq, record, timelineEntry);
+      this.writeParsedCacheAsync(session, seq, record);
     }
+  }
+
+  private buildTimelineEntry(
+    _session: string,
+    seq: number,
+    purpose: string,
+    requestAt: string,
+    traceReq: TraceRequest,
+    traceRes: TraceResponse | null,
+    error: { message: string; stack?: string } | null,
+  ): TimelineEntry {
+    const responseAt = new Date().toISOString();
+    const requestTime = new Date(requestAt).getTime();
+    const responseTime = new Date(responseAt).getTime();
+    const totalDurationMs = responseTime - requestTime;
+
+    let provider: string | null = null;
+    let model: string | null = null;
+    let inputTokens: number | null = null;
+    let outputTokens: number | null = null;
+
+    if (traceRes?.body && typeof traceRes.body === "object" && traceRes.body !== null) {
+      const body = traceRes.body as Record<string, unknown>;
+      if (typeof body.model === "string") model = body.model;
+      if (body.usage && typeof body.usage === "object") {
+        const usage = body.usage as Record<string, unknown>;
+        if (typeof usage.input_tokens === "number") inputTokens = usage.input_tokens;
+        if (typeof usage.output_tokens === "number") outputTokens = usage.output_tokens;
+        if (typeof usage.prompt_tokens === "number") inputTokens = usage.prompt_tokens;
+        if (typeof usage.completion_tokens === "number") outputTokens = usage.completion_tokens;
+      }
+    }
+
+    if (traceReq.url.includes("openai.com") || traceReq.url.includes("api.openai")) {
+      provider = "openai";
+    } else if (traceReq.url.includes("anthropic.com") || traceReq.url.includes("api.anthropic")) {
+      provider = "anthropic";
+    }
+
+    return {
+      seq,
+      url: traceReq.url,
+      method: traceReq.method,
+      purpose,
+      requestAt,
+      responseAt: error ? null : responseAt,
+      status: error ? 0 : (traceRes?.status ?? 0),
+      provider,
+      model,
+      inputTokens,
+      outputTokens,
+      totalDurationMs,
+    };
   }
 
   private sanitizeStackTrace(stack?: string): string | undefined {
@@ -369,24 +452,31 @@ export class TracePlugin {
       lastTokenAt: latency?.lastTokenAt ?? undefined,
     };
   }
+  private writeParsedCacheAsync(session: string, seq: number, record: TraceRecord): void {
+    setImmediate(() => {
+      try {
+        const parsed = parse.detectAndParse(record as Parameters<typeof parse.detectAndParse>[0]);
+        this.writeQueue.writeParsedCache(session, seq, {
+          ...(parsed as unknown as Record<string, unknown>),
+          _pcv: parse.PARSED_CACHE_VERSION,
+        });
+      } catch {
+        // fail silently — parsed cache is optional
+      }
+    });
+  }
 
-  /** Wrap a fetch function with trace recording.
-   *  Returns a new function — independent per call — that records the request/response
-   *  and delegates to the passed-in fetch for the actual HTTP call. */
+
   wrap(fetch: typeof globalThis.fetch): typeof fetch {
     const capturedOrig = fetch;
     return async (input, init) => this.tracedFetch(input, init, capturedOrig);
   }
 
-  /** Convenience: wraps the current globalThis.fetch.
-   *  Caller is responsible for patching globalThis.fetch with the result. */
   getInterceptor(): typeof fetch {
     const capturedOrig = this.origFetch;
     return async (input, init) => this.tracedFetch(input, init, capturedOrig);
   }
 
-  /** Install the interceptor on globalThis.fetch automatically.
-   *  Used internally by the "." entry. For library API usage, prefer wrap() or getInterceptor(). */
   installInterceptor(): void {
     if (this.interceptorInstalled) return;
     this.origFetch = globalThis.fetch;
@@ -398,16 +488,5 @@ export class TracePlugin {
     if (!this.interceptorInstalled) return;
     globalThis.fetch = this.origFetch;
     this.interceptorInstalled = false;
-  }
-
-  async initStateManager(): Promise<void> {
-    this.stateManager = new StateManager(this.globalDir);
-    await this.stateManager.init();
-    this.stateManager.sync();
-    this.stateQueue.setStateManager(this.stateManager);
-  }
-
-  getStateManager(): StateManager | null {
-    return this.stateManager;
   }
 }

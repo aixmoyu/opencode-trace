@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { existsSync, rmSync } from "node:fs";
 import { record, logger } from "@opencode-trace/core";
 import { parseFlags, GLOBAL_TRACE_DIR } from "../utils.js";
 
@@ -7,11 +8,10 @@ export async function cmdSync(args: string[]): Promise<void> {
   const traceDir = GLOBAL_TRACE_DIR;
 
   if (flags.repair) {
-    const { existsSync, rmSync } = await import("node:fs");
-    const dbPath = resolve(traceDir, "state.db");
-    if (existsSync(dbPath)) {
-      rmSync(dbPath, { force: true });
-      logger.info("Removed corrupted state.db");
+    const configPath = resolve(traceDir, "config.json");
+    if (existsSync(configPath)) {
+      rmSync(configPath, { force: true });
+      logger.info("Removed corrupted config.json");
     }
   }
 

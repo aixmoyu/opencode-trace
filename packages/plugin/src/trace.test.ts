@@ -3,7 +3,6 @@ import {
   mkdtempSync,
   rmSync,
   existsSync,
-  readdirSync,
   readFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -122,8 +121,8 @@ describe("Plugin - event hook 处理 session.created", () => {
     const sessionDir = join(traceDir, sessionId);
     expect(existsSync(sessionDir)).toBe(true);
 
-    const dbPath = join(traceDir, "state.db");
-    expect(existsSync(dbPath)).toBe(true);
+    const configPath = join(traceDir, "config.json");
+    expect(existsSync(configPath)).toBe(true);
 
     const metaPath = join(sessionDir, "metadata.json");
     expect(existsSync(metaPath)).toBe(true);
@@ -405,8 +404,8 @@ describe("Plugin - tool.execute.after hook 处理 Task 工具", () => {
     );
 
     const traceDir = join(testDir, ".opencode-trace");
-    const dbPath = join(traceDir, "state.db");
-    expect(existsSync(dbPath)).toBe(true);
+    const configPath = join(traceDir, "config.json");
+    expect(existsSync(configPath)).toBe(true);
   });
 
   test("tool.execute.after hook 对非 Task 工具不记录 sub session", async () => {
@@ -453,8 +452,8 @@ describe("Plugin - tool.execute.after hook 处理 Task 工具", () => {
     );
 
     const traceDir = join(testDir, ".opencode-trace");
-    const dbPath = join(traceDir, "state.db");
-    expect(existsSync(dbPath)).toBe(true);
+    const configPath = join(traceDir, "config.json");
+    expect(existsSync(configPath)).toBe(true);
   });
 });
 

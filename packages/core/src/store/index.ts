@@ -12,9 +12,10 @@ import archiver from "archiver";
 import AdmZip from "adm-zip";
 import { getTraceDir as getDefaultTraceDir } from "../platform.js";
 import type { TraceRecord } from "../types.js";
-import { StateManager, SessionState } from "../state/index.js";
+import { ConfigManager, SessionState } from "../state/index.js";
 import { TraceRecordSchema } from "../schemas/types.js";
 import { SessionMetadataFileSchema } from "../schemas/store-types.js";
+import { PARSED_CACHE_VERSION } from "../parse/index.js";
 import { logger } from "../logger.js";
 
 export interface StoreOptions {
@@ -46,19 +47,27 @@ export interface SessionMetaWithScope extends SessionMeta {
   scope: "global" | "local";
 }
 
-/**
- * Represents a session in a tree structure with child sessions.
- * Used for displaying hierarchical session relationships in the viewer.
- *
- * Children are a flat list (SessionMeta[]) - not recursive (SessionTreeNode[]).
- * This design supports only one level of nesting (parent → children, no grandchildren).
- */
 export interface SessionTreeNodeWithScope extends SessionMetaWithScope {
   children: SessionMetaWithScope[];
 }
 
 export interface SessionTreeNode extends SessionMeta {
   children: SessionMeta[];
+}
+
+export interface TimelineEntry {
+  seq: number;
+  url: string;
+  method: string;
+  purpose: string;
+  requestAt: string;
+  responseAt: string | null;
+  status: number;
+  provider: string | null;
+  model: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalDurationMs: number | null;
 }
 
 function safeReaddir(dir: string): string[] {
@@ -75,12 +84,12 @@ function safeReaddir(dir: string): string[] {
   }
 }
 
-const managers = new Map<string, StateManager>();
+const managers = new Map<string, ConfigManager>();
 const initPromises = new Map<string, Promise<void>>();
 
-async function getManager(traceDir: string): Promise<StateManager> {
+async function getManager(traceDir: string): Promise<ConfigManager> {
   if (!managers.has(traceDir)) {
-    const manager = new StateManager(traceDir);
+    const manager = new ConfigManager(traceDir);
     managers.set(traceDir, manager);
     initPromises.set(traceDir, manager.init());
   }
@@ -88,7 +97,7 @@ async function getManager(traceDir: string): Promise<StateManager> {
   return managers.get(traceDir)!;
 }
 
-function getManagerSync(traceDir: string): StateManager | null {
+function getManagerSync(traceDir: string): ConfigManager | null {
   return managers.get(traceDir) ?? null;
 }
 
@@ -115,70 +124,99 @@ export function listSessions(options?: StoreOptions): SessionMeta[] {
 
   const entries = safeReaddir(base);
   const sessions: SessionMeta[] = [];
-
-  for (const entry of entries) {
-    const full = join(base, entry);
-    try {
-      const stat = statSync(full);
-      if (!stat.isDirectory()) continue;
-      const files = safeReaddir(full).filter(
-        (f) => f.endsWith(".json") && f !== "metadata.json",
-      );
-      const hasRecords = files.length > 0;
-
-      let title: string | undefined;
-      let parentID: string | undefined;
-
-      let folderPath: string | undefined;
+    for (const entry of entries) {
+      const full = join(base, entry);
       try {
-        const metaPath = join(full, "metadata.json");
-        const metaRaw = readFileSync(metaPath, "utf-8");
-        const meta = JSON.parse(metaRaw) as {
-          title?: string;
-          parentID?: string;
-          folderPath?: string;
-        };
-        title = meta.title;
-        parentID = meta.parentID;
-        folderPath = meta.folderPath;
-      } catch (err) {
-        logger.error("Failed to read metadata for session listing", {
-          sessionDir: full,
-          error: String(err),
-        });
-      }
+        const stat = statSync(full);
+        if (!stat.isDirectory()) continue;
 
-      if (!hasRecords && !title) continue;
-
-      let createdAt: string | null = null;
-      let updatedAt: string | null = null;
-
-      for (const f of files) {
+        let title: string | undefined;
+        let parentID: string | undefined;
+        let folderPath: string | undefined;
         try {
-          const raw = readFileSync(join(full, f), "utf-8");
-          const rec: TraceRecord = JSON.parse(raw);
-          if (!createdAt || rec.requestAt < createdAt)
-            createdAt = rec.requestAt;
-          if (!updatedAt || rec.responseAt > updatedAt)
-            updatedAt = rec.responseAt;
-        } catch (err) {
-          logger.error("Failed to read record file for session listing", {
-            sessionDir: full,
-            file: f,
-            error: String(err),
-          });
+          const metaPath = join(full, "metadata.json");
+          const metaRaw = readFileSync(metaPath, "utf-8");
+          const meta = JSON.parse(metaRaw) as {
+            title?: string;
+            parentID?: string;
+            folderPath?: string;
+          };
+          title = meta.title;
+          parentID = meta.parentID;
+          folderPath = meta.folderPath;
+        } catch {
+          // no metadata, that's ok
         }
-      }
 
-      sessions.push({
-        id: entry,
-        requestCount: files.length,
-        createdAt,
-        updatedAt,
-        title,
-        parentID,
-        folderPath,
-      });
+        // Fast path: read timing from timeline.ndjson
+        let createdAt: string | null = null;
+        let updatedAt: string | null = null;
+        let requestCount = 0;
+        let usedNdjson = false;
+
+        const ndjsonPath = join(full, "timeline.ndjson");
+        if (existsSync(ndjsonPath)) {
+          try {
+            const raw = readFileSync(ndjsonPath, "utf-8");
+            const lines = raw.split("\n").filter((l) => l.trim());
+            if (lines.length > 0) {
+              requestCount = lines.length;
+              usedNdjson = true;
+              let lastResponseAt: string | null = null;
+              for (const line of lines) {
+                try {
+                  const entry = JSON.parse(line) as { requestAt?: string; responseAt?: string | null };
+                  if (entry.requestAt && (!createdAt || entry.requestAt < createdAt)) {
+                    createdAt = entry.requestAt;
+                  }
+                  if (entry.responseAt && (!lastResponseAt || entry.responseAt > lastResponseAt)) {
+                    lastResponseAt = entry.responseAt;
+                  }
+                } catch {
+                  // skip malformed line
+                }
+              }
+              updatedAt = lastResponseAt;
+            }
+          } catch {
+            // ndjson unreadable, fall through to JSON file scan
+          }
+        }
+
+        // Fall back to scanning JSON files when ndjson unavailable
+        if (!usedNdjson) {
+          const files = safeReaddir(full).filter(
+            (f) => /^\d+\.json$/.test(f),
+          );
+          if (files.length === 0 && !title) continue;
+          requestCount = files.length;
+
+          for (const f of files) {
+            try {
+              const raw = readFileSync(join(full, f), "utf-8");
+              const rec: TraceRecord = JSON.parse(raw);
+              if (!createdAt || rec.requestAt < createdAt) createdAt = rec.requestAt;
+              if (!updatedAt || rec.responseAt > updatedAt) updatedAt = rec.responseAt;
+            } catch (err) {
+              logger.error("Failed to read record file for session listing", {
+                sessionDir: full,
+                file: f,
+                error: String(err),
+              });
+            }
+          }
+        }
+
+        sessions.push({
+          id: entry,
+          requestCount,
+          createdAt,
+          updatedAt,
+          title,
+          parentID,
+          folderPath,
+        });
+
     } catch (err) {
       logger.error("Failed to process session entry for listing", {
         entry,
@@ -220,7 +258,7 @@ export function getSessionRecords(
   if (!existsSync(sessionDir)) return [];
 
   const files = safeReaddir(sessionDir)
-    .filter((f) => f.endsWith(".json") && f !== "metadata.json")
+    .filter((f) => /^\d+\.json$/.test(f))
     .sort((a, b) => {
       const na = parseInt(a, 10);
       const nb = parseInt(b, 10);
@@ -306,11 +344,73 @@ export async function initStore(options?: StoreOptions): Promise<void> {
   await getManager(traceDir);
 }
 
-export function syncStore(options?: StoreOptions): void {
-  const traceDir = resolveDir(options);
-  const manager = getManagerSync(traceDir);
-  if (manager) {
-    manager.sync();
+export function readTimelineIndex(
+  sessionId: string,
+  options?: StoreOptions,
+): TimelineEntry[] {
+  const sessionDir = join(resolveDir(options), sessionId);
+  const indexPath = join(sessionDir, "timeline.ndjson");
+  if (!existsSync(indexPath)) return [];
+
+  const entries: TimelineEntry[] = [];
+  try {
+    const raw = readFileSync(indexPath, "utf-8");
+    const lines = raw.split("\n");
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as TimelineEntry;
+        entries.push(entry);
+      } catch {
+        // skip malformed lines
+      }
+    }
+  } catch (err) {
+    logger.error("Failed to read timeline index", {
+      sessionId,
+      indexPath,
+      error: String(err),
+    });
+  }
+  return entries;
+}
+
+export function getCachedParsed(
+  sessionId: string,
+  seq: number,
+  options?: StoreOptions,
+): Record<string, unknown> | null {
+  const sessionDir = join(resolveDir(options), sessionId);
+  const cachePath = join(sessionDir, `${seq}.parsed`);
+  if (!existsSync(cachePath)) return null;
+
+  try {
+    const jsonPath = join(sessionDir, `${seq}.json`);
+    if (existsSync(jsonPath)) {
+      const cacheStat = statSync(cachePath);
+      const jsonStat = statSync(jsonPath);
+      if (cacheStat.mtimeMs < jsonStat.mtimeMs) {
+        return null;
+      }
+    }
+
+    const raw = readFileSync(cachePath, "utf-8");
+    const data = JSON.parse(raw) as Record<string, unknown>;
+
+    // Version check: reject cache from an incompatible parser version
+    if (data._pcv !== PARSED_CACHE_VERSION) return null;
+
+    // Strip the internal version marker before returning
+    const { _pcv: _, ...clean } = data;
+    return clean;
+  } catch (err) {
+    logger.error("Failed to read parsed cache", {
+      sessionId,
+      seq,
+      cachePath,
+      error: String(err),
+    });
+    return null;
   }
 }
 
@@ -506,11 +606,11 @@ export async function importSessionZip(
         : null;
 
       const existingRecords = safeReaddir(existingDir).filter(
-        (f) => f.endsWith(".json") && f !== "metadata.json",
+        (f) => /^\d+\.json$/.test(f),
       );
       const importingRecords = existsSync(join(tempDir, "sessions", sessionId))
         ? safeReaddir(join(tempDir, "sessions", sessionId)).filter(
-            (f) => f.endsWith(".json") && f !== "metadata.json",
+            (f) => /^\d+\.json$/.test(f),
           )
         : [];
 
@@ -564,7 +664,7 @@ export async function importSessionZip(
     }
 
     const importedRecords = safeReaddir(targetDir).filter(
-      (f) => f.endsWith(".json") && f !== "metadata.json",
+      (f) => /^\d+\.json$/.test(f),
     );
 
     importedSessions.push({

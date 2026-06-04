@@ -303,6 +303,7 @@
 import { ref, computed, onMounted, inject, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api, apiDelete, apiPost } from "../composables/useApi";
+import { useSSE } from "../composables/useSSE";
 import { relativeTime, getProjectName, esc } from "../utils/format";
 
 const router = useRouter();
@@ -566,6 +567,12 @@ async function loadSessions() {
 }
 
 onMounted(loadSessions);
+
+const { refreshKey } = useSSE();
+
+watch(refreshKey, () => {
+  loadSessions();
+});
 
 defineExpose({ loadSessions });
 </script>

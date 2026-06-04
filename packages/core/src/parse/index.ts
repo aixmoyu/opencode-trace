@@ -1,3 +1,12 @@
+/** 
+ * Parsed cache format version. 
+ * Increment when `detectAndParse()` output format changes 
+ * (e.g., Conversation type fields added/renamed/removed).
+ * This ensures the viewer detects stale cached parsed files 
+ * after a core/plugin upgrade.
+ */
+export const PARSED_CACHE_VERSION = "1";
+
 import "./openai-chat.js";
 import "./openai-responses.js";
 import "./anthropic.js";

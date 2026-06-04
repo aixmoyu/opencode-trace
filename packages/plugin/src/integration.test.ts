@@ -72,7 +72,7 @@ describe("Integration: TracePlugin full flow", () => {
     await plugin.initStateManager();
 
     const sessionId = "concurrent-test";
-    plugin["stateManager"]!.startSession(sessionId);
+    plugin.getStateManager()!.startSession(sessionId);
 
     const requests = Array.from({ length: 5 }, (_, i) =>
       plugin.tracedFetch(`https://example.com/${i}`, {
@@ -88,7 +88,7 @@ describe("Integration: TracePlugin full flow", () => {
     await waitForFiles(sessionDir, 5);
 
     const files = readdirSync(sessionDir)
-      .filter((f) => f.endsWith(".json"))
+      .filter((f) => /^\d+\.json$/.test(f))
       .sort();
     expect(files.length).toBe(5);
 

@@ -27,14 +27,13 @@ opencode-trace automatically records every interaction between OpenCode and AI P
 No installation required, use directly:
 
 ```bash
+# Install OpenCode plugin (automatic tracing)
+opencode plugin -g @opencode-trace/plugin
+
 # Start Web Viewer (automatically opens browser)
 npx -y @opencode-trace/viewer@latest
 
-# View CLI help
-npx -y @opencode-trace/cli@latest -h
 
-# Install OpenCode plugin (automatic tracing)
-opencode plugin @opencode-trace/plugin
 ```
 
 ## Installation
@@ -44,7 +43,7 @@ opencode plugin @opencode-trace/plugin
 After installing the OpenCode plugin, all conversations are automatically traced to `~/.opencode-trace`:
 
 ```bash
-opencode plugin @opencode-trace/plugin
+opencode plugin -g @opencode-trace/plugin
 ```
 
 Or add in OpenCode configuration file:

@@ -11,7 +11,6 @@ import {
   statSync,
 } from "node:fs";
 import { promises as fs } from "node:fs";
-import initSqlJs, { Database, type SqlJsStatic } from "sql.js";
 import type { TraceRecord } from "../types.js";
 import { logger } from "../logger.js";
 
@@ -34,6 +33,7 @@ export interface SessionMetadata {
   subSessions?: string[];
   enabled?: boolean;
   folderPath?: string;
+  startedAt?: string;
 }
 
 export interface GlobalState {
@@ -42,26 +42,31 @@ export interface GlobalState {
   updatedAt: string;
 }
 
-const DB_FILENAME = "state.db";
-const DB_CORRUPT_SUFFIX = ".corrupt";
-const CURRENT_SCHEMA_VERSION = 1;
+const CONFIG_FILENAME = "config.json";
+const CURRENT_SCHEMA_VERSION = 2;
 
-interface Migration {
-  version: number;
-  migrate: (db: Database) => void;
+interface ConfigFile {
+  global_trace_enabled: boolean;
+  plugin_enabled: boolean;
+  current_session: string | null;
+  schema_version: number;
 }
 
-const MIGRATIONS: Migration[] = [];
+const DEFAULT_CONFIG: ConfigFile = {
+  global_trace_enabled: false,
+  plugin_enabled: true,
+  current_session: null,
+  schema_version: CURRENT_SCHEMA_VERSION,
+};
 
-export class StateManager {
+export class ConfigManager {
   private traceDir: string;
-  private db: Database | null = null;
-  private dbPath: string;
-  private sqlJs: SqlJsStatic | null = null;
+  private configPath: string;
+  private configCache: ConfigFile | null = null;
 
   constructor(traceDir: string) {
     this.traceDir = traceDir;
-    this.dbPath = join(traceDir, DB_FILENAME);
+    this.configPath = join(traceDir, CONFIG_FILENAME);
 
     if (!existsSync(traceDir)) {
       mkdirSync(traceDir, { recursive: true });
@@ -69,280 +74,161 @@ export class StateManager {
   }
 
   async init(): Promise<void> {
-    try {
-      const SQL = await initSqlJs();
-      this.sqlJs = SQL;
+    mkdirSync(this.traceDir, { recursive: true });
 
-      if (existsSync(this.dbPath)) {
-        try {
-          const buffer = readFileSync(this.dbPath);
-          this.db = new SQL.Database(buffer);
-          this.validateDb();
-          this.runMigrations();
-        } catch (err) {
-          logger.error("Database validation failed, recreating", {
-            traceDir: this.traceDir,
-            error: String(err),
-          });
-          this.handleCorruptDb();
-          this.db = new SQL.Database();
-          this.createSchema();
-        }
-      } else {
-        this.db = new SQL.Database();
-        this.createSchema();
-      }
-
-      this.insertDefaultState();
-      this.persistDb();
-    } catch (err) {
-      logger.error("StateManager initialization failed", {
-        traceDir: this.traceDir,
-        error: String(err),
-      });
-      this.db = null;
-    }
-  }
-
-  private validateDb(): void {
-    if (!this.db) return;
-    try {
-      this.db.exec("SELECT 1 FROM schema_version LIMIT 1");
-      this.db.exec("SELECT 1 FROM sessions LIMIT 1");
-      this.db.exec("SELECT 1 FROM global_state LIMIT 1");
-    } catch {
-      throw new Error("Schema invalid");
-    }
-  }
-
-  private getSchemaVersion(): number {
-    if (!this.db) return 0;
-    try {
-      const result = this.db.exec("SELECT MAX(version) FROM schema_version");
-      if (
-        result.length === 0 ||
-        result[0].values.length === 0 ||
-        result[0].values[0][0] === null
-      )
-        return 0;
-      return result[0].values[0][0] as number;
-    } catch (err) {
-      logger.error("Failed to read schema version", {
-        traceDir: this.traceDir,
-        error: String(err),
-      });
-      return 0;
-    }
-  }
-
-  private runMigrations(): void {
-    if (!this.db) return;
-
-    const currentVersion = this.getSchemaVersion();
-    const pending = MIGRATIONS.filter((m) => m.version > currentVersion).sort(
-      (a, b) => a.version - b.version,
-    );
-
-    for (const migration of pending) {
+    const legacyDbPath = join(this.traceDir, "state.db");
+    if (existsSync(legacyDbPath)) {
       try {
-        migration.migrate(this.db);
-        this.db.run("INSERT INTO schema_version (version) VALUES (?)", [
-          migration.version,
-        ]);
-        logger.info("Database migration applied", {
-          version: migration.version,
+        // @ts-expect-error — sql.js is optional; only used for legacy migration from v1
+        const sqlJsModule: any = await import("sql.js");
+        const initSqlJs: any = sqlJsModule.default;
+        const SQL: any = await initSqlJs();
+        const buffer = readFileSync(legacyDbPath);
+        const db = new SQL.Database(buffer);
+        try {
+          const result = db.exec(
+            "SELECT key, value FROM global_state",
+          );
+          if (result.length > 0 && result[0].values.length > 0) {
+            const config = this.readConfig();
+            for (const row of result[0].values) {
+              const key = row[0] as string;
+              const value = row[1] as string | null;
+              if (key === "global_trace_enabled") {
+                config.global_trace_enabled = value === "true";
+              } else if (key === "plugin_enabled") {
+                config.plugin_enabled = value !== "false";
+              } else if (key === "current_session") {
+                config.current_session = value;
+              }
+            }
+            this.writeConfig(config);
+          }
+        } finally {
+          db.close();
+        }
+        try {
+          rmSync(legacyDbPath, { force: true });
+        } catch {
+          // ignore deletion errors
+        }
+        logger.info("Migrated from legacy state.db to config.json", {
           traceDir: this.traceDir,
         });
       } catch (err) {
-        logger.error("Database migration failed", {
-          version: migration.version,
+        logger.error("Failed to migrate legacy state.db, removing", {
           traceDir: this.traceDir,
           error: String(err),
         });
-        throw err;
+        try {
+          rmSync(legacyDbPath, { force: true });
+        } catch {
+          // ignore deletion errors
+        }
       }
     }
+
+    if (!existsSync(this.configPath)) {
+      this.writeConfig({ ...DEFAULT_CONFIG });
+    }
+
+    this.configCache = this.readConfig();
   }
 
-  private handleCorruptDb(): void {
-    const corruptPath = this.dbPath + DB_CORRUPT_SUFFIX;
+  private readConfig(): ConfigFile {
     try {
-      renameSync(this.dbPath, corruptPath);
+      if (!existsSync(this.configPath)) {
+        return { ...DEFAULT_CONFIG };
+      }
+      const raw = readFileSync(this.configPath, "utf-8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+      return {
+        global_trace_enabled: normalizeBoolean(
+          parsed.global_trace_enabled,
+          DEFAULT_CONFIG.global_trace_enabled,
+        ),
+        plugin_enabled: normalizeBoolean(
+          parsed.plugin_enabled,
+          DEFAULT_CONFIG.plugin_enabled,
+        ),
+        current_session:
+          typeof parsed.current_session === "string"
+            ? parsed.current_session
+            : null,
+        schema_version:
+          typeof parsed.schema_version === "number"
+            ? parsed.schema_version
+            : CURRENT_SCHEMA_VERSION,
+      };
     } catch (err) {
-      logger.error("Failed to rename corrupt database, removing", {
-        dbPath: this.dbPath,
+      logger.error("Failed to read config.json, using defaults", {
+        configPath: this.configPath,
         error: String(err),
       });
-      try {
-        rmSync(this.dbPath, { force: true });
-      } catch (rmErr) {
-        logger.error("Failed to remove corrupt database", {
-          dbPath: this.dbPath,
-          error: String(rmErr),
-        });
-      }
+      return { ...DEFAULT_CONFIG };
     }
   }
 
-  private createSchema(): void {
-    if (!this.db) return;
-
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS schema_version (
-        version INTEGER PRIMARY KEY,
-        applied_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS sessions (
-        id TEXT PRIMARY KEY,
-        status TEXT DEFAULT 'active',
-        started_at TEXT,
-        ended_at TEXT,
-        request_count INTEGER DEFAULT 0,
-        synced_at TEXT
-      );
-      
-      CREATE TABLE IF NOT EXISTS global_state (
-        key TEXT PRIMARY KEY,
-        value TEXT,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE TABLE IF NOT EXISTS request_index (
-        session_id TEXT,
-        seq INTEGER,
-        url TEXT,
-        method TEXT,
-        purpose TEXT,
-        request_at TEXT,
-        PRIMARY KEY (session_id, seq)
-      );
-    `);
-
-    this.db.exec(
-      `INSERT INTO schema_version (version) VALUES (${CURRENT_SCHEMA_VERSION})`,
-    );
-  }
-
-  private insertDefaultState(): void {
-    if (!this.db) return;
-
-    const existing = this.db.exec("SELECT key FROM global_state");
-    const existingKeys =
-      existing.length > 0 && existing[0].values.length > 0
-        ? existing[0].values.map((v) => v[0] as string)
-        : [];
-
-    const defaults: { key: string; value: string | null }[] = [
-      { key: "current_session", value: null },
-      { key: "plugin_enabled", value: "true" },
-      { key: "global_trace_enabled", value: "false" },
-    ];
-
-    for (const { key, value } of defaults) {
-      if (!existingKeys.includes(key)) {
-        this.db.run("INSERT INTO global_state (key, value) VALUES (?, ?)", [
-          key,
-          value,
-        ]);
-      }
-    }
-  }
-
-  private persistDb(): void {
-    if (!this.db) return;
+  private writeConfig(config: ConfigFile): void {
     try {
-      const data = this.db.export();
-      writeFileSync(this.dbPath, Buffer.from(data));
+      const tmpPath = this.configPath + ".tmp";
+      writeFileSync(tmpPath, JSON.stringify(config, null, 2), "utf-8");
+      renameSync(tmpPath, this.configPath);
+      this.configCache = config;
     } catch (err) {
-      logger.error("Failed to persist database", {
-        traceDir: this.traceDir,
+      logger.error("Failed to write config.json", {
+        configPath: this.configPath,
         error: String(err),
       });
     }
+  }
+
+  reloadConfig(): void {
+    this.configCache = this.readConfig();
   }
 
   getGlobalState(key: string): string | null {
-    if (!this.db) return null;
-
-    const result = this.db.exec(
-      "SELECT value FROM global_state WHERE key = ?",
-      [key],
-    );
-    if (result.length === 0 || result[0].values.length === 0) return null;
-    return result[0].values[0][0] as string | null;
+    if (!this.configCache) {
+      this.configCache = this.readConfig();
+    }
+    const v = (this.configCache as unknown as Record<string, unknown>)[key];
+    if (v === undefined || v === null) return null;
+    if (typeof v === "boolean") return v ? "true" : "false";
+    return String(v);
   }
 
   setGlobalState(key: string, value: string | null): void {
-    if (!this.db) return;
-
-    this.db.run(
-      "UPDATE global_state SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
-      [value, key],
-    );
-    this.persistDb();
+    const config = this.readConfig();
+    if (key === "global_trace_enabled") {
+      config.global_trace_enabled = value === "true";
+    } else if (key === "plugin_enabled") {
+      config.plugin_enabled = value !== "false";
+    } else if (key === "current_session") {
+      config.current_session = value;
+    } else {
+      (config as unknown as Record<string, unknown>)[key] = value;
+    }
+    this.writeConfig(config);
   }
 
   startSession(sessionId?: string): string {
     const id = sessionId ?? this.generateSessionId();
-
-    if (!this.db) {
-      mkdirSync(join(this.traceDir, id), { recursive: true });
-      return id;
-    }
-
-    const now = new Date().toISOString();
-    this.db.run(
-      "INSERT INTO sessions (id, status, started_at, request_count) VALUES (?, 'active', ?, 0)",
-      [id, now],
-    );
-    this.setGlobalState("current_session", id);
-
     mkdirSync(join(this.traceDir, id), { recursive: true });
-    this.persistDb();
-
+    this.setGlobalState("current_session", id);
+    this.updateSessionMetadata(id, { startedAt: new Date().toISOString() });
     return id;
   }
 
   stopSession(sessionId: string): void {
-    if (!this.db) return;
-
-    const now = new Date().toISOString();
-    this.db.run(
-      "UPDATE sessions SET status = 'stopped', ended_at = ? WHERE id = ?",
-      [now, sessionId],
-    );
-
     const current = this.getGlobalState("current_session");
     if (current === sessionId) {
       this.setGlobalState("current_session", null);
     }
-
-    this.persistDb();
   }
 
   getSession(sessionId: string): SessionState | null {
-    if (!this.db) {
-      return this.getSessionFromFs(sessionId);
-    }
-
-    const result = this.db.exec(
-      "SELECT id, status, started_at, ended_at, request_count FROM sessions WHERE id = ?",
-      [sessionId],
-    );
-    if (result.length === 0 || result[0].values.length === 0) return null;
-
-    const row = result[0].values[0];
-    const baseState = {
-      id: row[0] as string,
-      status: row[1] as SessionState["status"],
-      startedAt: row[2] as string | null,
-      endedAt: row[3] as string | null,
-      requestCount: row[4] as number,
-    };
-
-    const metadata = this.readMetadataFile(sessionId);
-    return { ...baseState, ...metadata };
+    return this.getSessionFromFs(sessionId);
   }
 
   getActiveSession(): string | null {
@@ -351,14 +237,7 @@ export class StateManager {
 
     const sessionDir = join(this.traceDir, sessionId);
     if (!existsSync(sessionDir)) {
-      if (this.db) {
-        this.db.run("DELETE FROM sessions WHERE id = ?", [sessionId]);
-        this.db.run("DELETE FROM request_index WHERE session_id = ?", [
-          sessionId,
-        ]);
-        this.setGlobalState("current_session", null);
-        this.persistDb();
-      }
+      this.setGlobalState("current_session", null);
       return null;
     }
 
@@ -373,106 +252,14 @@ export class StateManager {
     const sessionDir = join(this.traceDir, sessionId);
     await fs.mkdir(sessionDir, { recursive: true });
 
-    await fs.writeFile(
-      join(sessionDir, `${seq}.json`),
-      JSON.stringify(record, null, 2),
-    );
-
-    if (this.db) {
-      try {
-        this.db.run(
-          "UPDATE sessions SET request_count = request_count + 1 WHERE id = ?",
-          [sessionId],
-        );
-        this.db.run(
-          "INSERT INTO request_index (session_id, seq, url, method, purpose, request_at) VALUES (?, ?, ?, ?, ?, ?)",
-          [
-            sessionId,
-            seq,
-            record.request.url,
-            record.request.method,
-            record.purpose,
-            record.requestAt,
-          ],
-        );
-        this.persistDb();
-      } catch (err) {
-        logger.error("Failed to update SQLite index for record", {
-          sessionId,
-          seq,
-          traceDir: this.traceDir,
-          error: String(err),
-        });
-      }
-    }
-  }
-
-  sync(): void {
-    if (!this.db) return;
-
-    const fsSessions = this.scanFsSessions();
-    const dbResult = this.db.exec("SELECT id FROM sessions");
-    const dbSessions =
-      dbResult.length > 0
-        ? dbResult[0].values.map(
-            (r: (string | number | null | Uint8Array)[]) => r[0] as string,
-          )
-        : [];
-
-    for (const dbId of dbSessions) {
-      if (!fsSessions.includes(dbId)) {
-        this.db.run("DELETE FROM sessions WHERE id = ?", [dbId]);
-        this.db.run("DELETE FROM request_index WHERE session_id = ?", [dbId]);
-      }
-    }
-
-    for (const fsId of fsSessions) {
-      if (!dbSessions.includes(fsId)) {
-        const meta = this.getSessionFromFs(fsId);
-        if (meta) {
-          const now = new Date().toISOString();
-          this.db.run(
-            "INSERT INTO sessions (id, status, started_at, ended_at, request_count, synced_at) VALUES (?, ?, ?, ?, ?, ?)",
-            [
-              fsId,
-              meta.status,
-              meta.startedAt,
-              meta.endedAt,
-              meta.requestCount,
-              now,
-            ],
-          );
-        }
-      }
-    }
-
-    this.persistDb();
+    const filePath = join(sessionDir, `${seq}.json`);
+    const tmpPath = filePath + ".tmp";
+    await fs.writeFile(tmpPath, JSON.stringify(record, null, 2));
+    await fs.rename(tmpPath, filePath);
   }
 
   listSessions(): SessionState[] {
-    if (!this.db) {
-      return this.listSessionsFromFs();
-    }
-
-    const result = this.db.exec(
-      "SELECT id, status, started_at, ended_at, request_count FROM sessions ORDER BY started_at DESC",
-    );
-    if (result.length === 0) return [];
-
-    return result[0].values.map(
-      (row: (string | number | null | Uint8Array)[]) => {
-        const sessionId = row[0] as string;
-        const metadata = this.readMetadataFile(sessionId);
-        return {
-          id: sessionId,
-          status: row[1] as SessionState["status"],
-          startedAt: row[2] as string | null,
-          endedAt: row[3] as string | null,
-          requestCount: row[4] as number,
-          ...metadata,
-        };
-      },
-    );
+    return this.listSessionsFromFs();
   }
 
   private generateSessionId(): string {
@@ -504,22 +291,37 @@ export class StateManager {
     const sessionDir = join(this.traceDir, sessionId);
     if (!existsSync(sessionDir)) return null;
 
+    const metadata = this.readMetadataFile(sessionId);
+    const isCurrentSession =
+      this.configCache?.current_session === sessionId;
+
+    // Fast path: read timeline.ndjson instead of all JSON files
+    const ndjsonData = this.readNdjsonTiming(sessionDir);
+    if (ndjsonData) {
+      return {
+        id: sessionId,
+        status: isCurrentSession ? "active" : "stopped",
+        startedAt: metadata.startedAt ?? ndjsonData.startedAt,
+        endedAt: ndjsonData.endedAt,
+        requestCount: ndjsonData.count,
+        ...metadata,
+      };
+    }
+
+    // Fall back: read all {seq}.json files
     const files = readdirSync(sessionDir).filter(
-      (f) => f.endsWith(".json") && f !== "metadata.json",
+      (f) => /^\d+\.json$/.test(f),
     );
+
     if (files.length === 0) {
-      const metadata = this.readMetadataFile(sessionId);
-      if (Object.keys(metadata).length > 0) {
-        return {
-          id: sessionId,
-          status: "active",
-          startedAt: null,
-          endedAt: null,
-          requestCount: 0,
-          ...metadata,
-        };
-      }
-      return null;
+      return {
+        id: sessionId,
+        status: isCurrentSession ? "active" : "stopped",
+        startedAt: metadata.startedAt ?? null,
+        endedAt: null,
+        requestCount: 0,
+        ...metadata,
+      };
     }
 
     let startedAt: string | null = null;
@@ -543,11 +345,10 @@ export class StateManager {
       }
     }
 
-    const metadata = this.readMetadataFile(sessionId);
     return {
       id: sessionId,
-      status: "active",
-      startedAt,
+      status: isCurrentSession ? "active" : "stopped",
+      startedAt: metadata.startedAt ?? startedAt,
       endedAt,
       requestCount: count,
       ...metadata,
@@ -566,6 +367,40 @@ export class StateManager {
     return sessions.sort((a, b) =>
       (b.startedAt ?? "").localeCompare(a.startedAt ?? ""),
     );
+  }
+
+  /** Try to read timing data from timeline.ndjson for O(S+logR) session listing. */
+  private readNdjsonTiming(sessionDir: string): { startedAt: string | null; endedAt: string | null; count: number } | null {
+    const indexPath = join(sessionDir, "timeline.ndjson");
+    if (!existsSync(indexPath)) return null;
+    try {
+      const raw = readFileSync(indexPath, "utf-8");
+      const lines = raw.split("\n").filter((l) => l.trim());
+      if (lines.length === 0) return { startedAt: null, endedAt: null, count: 0 };
+
+      let startedAt: string | null = null;
+      let endedAt: string | null = null;
+      let count = 0;
+
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as { requestAt?: string; responseAt?: string | null };
+          count++;
+          if (entry.requestAt && (!startedAt || entry.requestAt < startedAt)) {
+            startedAt = entry.requestAt;
+          }
+          if (entry.responseAt && (!endedAt || entry.responseAt > endedAt)) {
+            endedAt = entry.responseAt;
+          }
+        } catch {
+          // skip malformed line
+        }
+      }
+
+      return { startedAt, endedAt, count };
+    } catch {
+      return null;
+    }
   }
 
   private getMetadataPath(sessionId: string): string {
@@ -607,7 +442,7 @@ export class StateManager {
 
   updateSessionMetadata(
     sessionId: string,
-    metadata: { title?: string; parentID?: string; folderPath?: string },
+    metadata: Partial<SessionMetadata>,
   ): void {
     const existing = this.readMetadataFile(sessionId);
     const updated: SessionMetadata = { ...existing };
@@ -621,6 +456,9 @@ export class StateManager {
     if (metadata.folderPath !== undefined) {
       updated.folderPath = metadata.folderPath;
     }
+    if (metadata.startedAt !== undefined) {
+      updated.startedAt = metadata.startedAt;
+    }
 
     this.writeMetadataFile(sessionId, updated);
   }
@@ -633,22 +471,6 @@ export class StateManager {
   getSessionEnabled(sessionId: string): boolean {
     const metadata = this.readMetadataFile(sessionId);
     return metadata.enabled ?? true;
-  }
-
-  reload(): void {
-    if (!this.sqlJs || !existsSync(this.dbPath)) return;
-    try {
-      const buffer = readFileSync(this.dbPath);
-      if (this.db) {
-        this.db.close();
-      }
-      this.db = new this.sqlJs.Database(buffer);
-    } catch (err) {
-      logger.error("Failed to reload database from disk", {
-        traceDir: this.traceDir,
-        error: String(err),
-      });
-    }
   }
 
   isTraceEnabled(sessionId?: string): boolean {
@@ -672,3 +494,12 @@ export class StateManager {
     }
   }
 }
+
+function normalizeBoolean(value: unknown, defaultValue: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return defaultValue;
+}
+
+export type StateManager = ConfigManager;

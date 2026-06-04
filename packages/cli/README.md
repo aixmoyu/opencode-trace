@@ -36,9 +36,8 @@ opencode-trace status -s <id>      # View status for specific session
 #### Session Management
 
 ```bash
+opencode-trace sync                # Rebuild ndjinx index from JSON files
 opencode-trace list                # List all sessions
-opencode-trace sync                # Sync SQLite with filesystem
-opencode-trace sync --repair       # Rebuild corrupted state.db
 ```
 
 #### Data Viewing

@@ -94,9 +94,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../composables/useApi";
+import { useSSE } from "../composables/useSSE";
 import {
   esc,
   formatNumber,
@@ -410,6 +411,12 @@ async function loadTimeline() {
 }
 
 onMounted(loadTimeline);
+
+const { refreshKey } = useSSE();
+
+watch(refreshKey, () => {
+  loadTimeline();
+});
 </script>
 
 <style scoped>
@@ -422,6 +429,7 @@ onMounted(loadTimeline);
 
 .sort-label {
   display: flex;
+
   align-items: center;
   gap: 6px;
   font-size: 13px;

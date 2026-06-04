@@ -78,8 +78,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { api } from "../composables/useApi";
+import { useSSE } from "../composables/useSSE";
 import {
   esc,
   formatTime,
@@ -343,6 +344,12 @@ async function loadRecord() {
   }
 }
 
+
+const { refreshKey } = useSSE();
+
+watch(refreshKey, () => {
+  loadRecord();
+});
 onMounted(loadRecord);
 </script>
 

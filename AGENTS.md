@@ -6,7 +6,7 @@ Monorepo with npm workspaces + turbo, 4 packages under `packages/*`. Build order
 
 | Package | Purpose | Key Dependencies | Exports |
 |---------|---------|------------------|---------|
-| `@opencode-trace/core` | Core (parse, store, query, record, state, format, transform) | sql.js, zod, winston | `.` + `./state` subpath |
+| `@opencode-trace/core` | Core (parse, store, query, record, state, format, transform) | zod, winston | `.` + `./state` subpath |
 | `@opencode-trace/cli` | CLI tool (`opencode-trace`) | core | `bin: opencode-trace` |
 | `@opencode-trace/plugin` | OpenCode plugin (intercepts fetch) | @opencode-ai/plugin, core | plugin entry |
 | `@opencode-trace/viewer` | Web viewer (`opencode-trace-viewer`) | fastify, vue, core | `bin: opencode-trace-viewer` |
@@ -42,13 +42,59 @@ npx tsc --noEmit        # type-check all packages (CI lint job)
 - **Publishing order** (CI): core → cli → plugin → viewer. Skips if version already published.
 - No eslint, prettier, or formatter config exists in this repo.
 
-## Core Architecture
+## Architecture Principles
 
-Entry point: `packages/core/src/index.ts` re-exports 9 modules as namespaces (store, parse, transform, query, record, state, format, schemas).
+### File System is Source of Truth
+No database. All data lives in `~/.opencode-trace/` as files:
+```
+~/.opencode-trace/
+├── config.json              # Global state (JSON, atomic writes via .tmp+rename)
+├── <session-id>/            # Per-session directory
+│   ├── {seq}.json           # Raw TraceRecord (source of truth)
+│   ├── {seq}.sse            # Raw SSE stream (if streaming)
+│   ├── {seq}.parsed         # Parsed conversation cache (detectAndParse output)
+│   ├── timeline.ndjson      # Summary index (one JSON line per record, append-only)
+│   └── metadata.json        # Session metadata
+```
 
-Data flow: HTTP Request → Plugin intercepts → Core Parse → Core Store → Core Query → Viewer/CLI
+## Parsed Cache Versioning (IMPORTANT)
 
-`store/index.ts` reads/writes `~/.opencode-trace/` — session dirs with `{N}.json`, `{N}.sse`, `metadata.json` + `state.db` (SQLite).
+`{seq}.parsed` is a **cache** of `detectAndParse(record)`. When changing the parsed output format
+(`Conversation` type fields, `Block` types, provider parser output), you MUST increment
+`PARSED_CACHE_VERSION` in `packages/core/src/parse/index.ts`.
+
+This guarantees the viewer detects stale cached files after a core/plugin upgrade and falls
+back to re-parsing from `{seq}.json`.
+
+- **Increment when**: Conversation type structure changes (field added/renamed/removed)
+- **Do NOT increment when**: Only parser *logic* changes but output format stays the same
+- **Consequence of forgetting**: Viewer silently serves stale parsed data
+
+## Read Performance Hierarchy
+
+The viewer reads data in priority order — each fallback is slower but always correct:
+1. **timeline.ndjson** — lightweight summary index (fastest, no parsing)
+2. **{seq}.parsed** — cached full parse result (fast, skips detectAndParse)
+3. **{seq}.json + detectAndParse()** — source of truth (slowest, always correct)
+
+When `timeline.ndjson` is missing/corrupted, the viewer falls back to scanning JSON files
+and asynchronously rebuilds the ndjinx.
+
+## Real-Time Updates
+
+- **chokidar** watches trace directories (global + local) for file changes
+- **SSE** (`/api/events`) pushes events to the frontend: `record:added`, `record:deleted`,
+  `record:updated`, `session:created`, `session:deleted`
+- Frontend uses `useSSE()` composable → `watch(refreshKey)` → re-fetch endpoints
+- When `{seq}.json` is deleted, the chokidar `unlink` handler also cleans up the
+  corresponding entry from `timeline.ndjinx` to prevent ghost records
+
+## No sql.js / No SQLite
+
+All sql.js/SQLite code has been removed. The only remaining `sql.js` reference is the
+legacy migration code in `ConfigManager.init()` that reads an existing `state.db`,
+migrates data to `config.json`, then deletes `state.db`. This dynamic import is
+try-caught — if `sql.js` is not installed, it safely deletes the legacy file.
 
 ## Viewer
 

@@ -43,8 +43,8 @@ Commands:
                                   -r: request range (not for raw)
                                   --collapse: top-level collapse (sys,tool,msgs)
                                   --collapse-blocks: block types (text,thinking,td,tc,tr,image,other)
-sync [--repair]                 Sync SQLite with filesystem
-                                   --repair: rebuild corrupted state.db
+sync [--repair]                 Sync filesystem indexes
+                                   --repair: rebuild corrupted config.json
   viewer [options]                Start web viewer
                                   Options: --port <num>, --no-open
   help                            Show this help message
