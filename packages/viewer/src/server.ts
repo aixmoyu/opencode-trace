@@ -62,6 +62,7 @@ export interface ViewerOptions {
   open?: boolean;
   corsOrigin?: string | string[] | RegExp | boolean;
   noListen?: boolean;
+  apiKey?: string;
 }
 
 export interface ViewerInstance {
@@ -157,6 +158,20 @@ export async function createViewer(
   });
   await app.register(multipart);
 
+  const apiKey = options?.apiKey;
+  if (apiKey) {
+    app.addHook("onRequest", async (req, reply) => {
+      if (!req.url.startsWith("/api/")) return;
+      const provided =
+        (req.headers["x-api-key"] as string) ||
+        (req.query as Record<string, string>)?.key ||
+        "";
+      if (provided !== apiKey) {
+        reply.code(401).send({ error: "Unauthorized" });
+      }
+    });
+  }
+
   const publicDir = join(__dirname, "public");
   if (existsSync(publicDir)) {
     await app.register(fastifyStatic, {
@@ -168,9 +183,16 @@ export async function createViewer(
   app.setNotFoundHandler(async (_req, reply) => {
     const indexPath = join(publicDir, "index.html");
     if (existsSync(indexPath)) {
+      let html = readFileSync(indexPath, "utf-8");
+      if (apiKey) {
+        html = html.replace(
+          "</head>",
+          `<script>window.__TRACE_API_KEY__ = ${JSON.stringify(apiKey)};</script></head>`,
+        );
+      }
       reply
         .type("text/html; charset=utf-8")
-        .send(readFileSync(indexPath, "utf-8"));
+        .send(html);
     } else {
       reply.code(404).send({ error: "Not found" });
     }

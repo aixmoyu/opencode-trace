@@ -26,7 +26,10 @@ export function useSSE(): {
 
   onMounted(() => {
     try {
-      eventSource = new EventSource("/api/events");
+      const url = window.__TRACE_API_KEY__
+        ? `/api/events?key=${encodeURIComponent(window.__TRACE_API_KEY__)}`
+        : "/api/events";
+      eventSource = new EventSource(url);
 
       eventSource.onopen = () => {
         connected.value = true;

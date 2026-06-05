@@ -6,12 +6,12 @@ import {
   readdirSync,
   readFileSync,
   writeFileSync,
-  renameSync,
   statSync,
 } from "node:fs";
 import { promises as fs } from "node:fs";
 import type { TraceRecord } from "../types.js";
 import { logger } from "../logger.js";
+import { safeRenameSync } from "../platform.js";
 
 export interface SessionState {
   id: string;
@@ -126,7 +126,7 @@ export class ConfigManager {
     try {
       const tmpPath = this.configPath + ".tmp";
       writeFileSync(tmpPath, JSON.stringify(config, null, 2), "utf-8");
-      renameSync(tmpPath, this.configPath);
+      safeRenameSync(tmpPath, this.configPath);
       this.configCache = config;
     } catch (err) {
       logger.error("Failed to write config.json", {
@@ -391,7 +391,9 @@ export class ConfigManager {
     }
 
     const metaPath = this.getMetadataPath(sessionId);
-    writeFileSync(metaPath, JSON.stringify(metadata, null, 2), "utf-8");
+    const tmpPath = metaPath + ".tmp";
+    writeFileSync(tmpPath, JSON.stringify(metadata, null, 2), "utf-8");
+    safeRenameSync(tmpPath, metaPath);
   }
 
   updateSessionMetadata(

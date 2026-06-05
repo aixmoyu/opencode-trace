@@ -10,7 +10,7 @@ import {
 import { join } from "node:path";
 import archiver from "archiver";
 import AdmZip from "adm-zip";
-import { getTraceDir as getDefaultTraceDir } from "../platform.js";
+import { getTraceDir as getDefaultTraceDir } from "../paths.js";
 import type { TraceRecord } from "../types.js";
 import { ConfigManager, SessionState } from "../state/index.js";
 import { TraceRecordSchema } from "../schemas/types.js";

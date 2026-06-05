@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
-import { logger } from "@opencode-trace/core";
+import { logger, safeRename } from "@opencode-trace/core";
 import type { TraceRecord } from "./trace.js";
 
 export interface TimelineEntry {
@@ -120,7 +120,7 @@ export class AsyncWriteQueue {
         const tmpPath = join(sessionDir, `${seq}.json.tmp`);
         const finalPath = join(sessionDir, `${seq}.json`);
         await fs.writeFile(tmpPath, JSON.stringify(record, null, 2));
-        await this.safeRename(tmpPath, finalPath);
+        await safeRename(tmpPath, finalPath);
 
         if (timelineEntry) {
           await this.appendTimeline(sessionDir, timelineEntry);
@@ -135,30 +135,6 @@ export class AsyncWriteQueue {
    * On POSIX rename is atomic and never fails for this reason.
    * On Windows, antivirus or delayed flush can cause transient lock errors.
    */
-  private async safeRename(src: string, dest: string, retries: number = 3): Promise<void> {
-    for (let i = 0; i < retries; i++) {
-      try {
-        await fs.rename(src, dest);
-        return;
-      } catch (err: unknown) {
-        const code = (err as NodeJS.ErrnoException)?.code;
-        if ((code === "EACCES" || code === "EPERM") && i < retries - 1) {
-          const delayMs = 50 * (i + 1);
-          logger.warn("safeRename retry", {
-            attempt: i + 1,
-            code,
-            src,
-            dest,
-            delayMs,
-          });
-          await new Promise((r) => setTimeout(r, delayMs));
-          continue;
-        }
-        throw err;
-      }
-    }
-  }
-
   /** Fire-and-forget parsed cache write. Never blocks the write queue. */
   writeParsedCache(session: string, seq: number, parsed: Record<string, unknown>, traceDir?: string): void {
     const dir = traceDir ?? this.defaultTraceDir;

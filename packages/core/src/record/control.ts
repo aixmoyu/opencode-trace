@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { getTraceDir } from "../platform.js";
+import { getTraceDir } from "../paths.js";
 import { ConfigManager, SessionState } from "../state/index.js";
 import { logger } from "../logger.js";
 

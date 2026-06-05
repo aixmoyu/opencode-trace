@@ -24,7 +24,9 @@ describe("useApi", () => {
 
       const result = await api<{ hello: string }>("sessions");
 
-      expect(fetchSpy).toHaveBeenCalledWith("/api/sessions");
+      expect(fetchSpy).toHaveBeenCalledWith("/api/sessions", {
+        headers: {},
+      });
       expect(result).toEqual({ hello: "world" });
     });
 
@@ -121,6 +123,7 @@ describe("useApi", () => {
 
       expect(fetchSpy).toHaveBeenCalledWith("/api/session/abc", {
         method: "POST",
+        headers: {},
       });
       expect(result).toEqual({ deleted: true });
     });

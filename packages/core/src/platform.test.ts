@@ -1,40 +1,38 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getTraceDir, sanitizePath } from "./platform.js";
+import { sanitizePath } from "./paths.js";
 
-const realPlatform = process.platform;
-const originalEnv = process.env;
+const originalEnv = { ...process.env };
 
 describe("getTraceDir", () => {
   beforeEach(() => {
     vi.resetModules();
+    process.env = { ...originalEnv };
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    process.env = { ...originalEnv };
   });
 
   it("returns homedir path on Windows", async () => {
-    vi.stubGlobal("process", {
-      platform: "win32",
-      env: { ...originalEnv, APPDATA: "C:\\Users\\testuser\\AppData\\Roaming" },
-    });
+    process.env.OPENTRACE_LOG = "off";
+    const platformSpy = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
     vi.doMock("node:os", () => ({
       homedir: () => "C:\\Users\\testuser",
     }));
-    const { getTraceDir } = await import("./platform.js");
+    const { getTraceDir } = await import("./paths.js");
     expect(getTraceDir()).toBe("C:\\Users\\testuser\\.opencode-trace");
+    platformSpy.mockRestore();
   });
 
   it("returns homedir path on non-Windows platforms", async () => {
-    vi.stubGlobal("process", {
-      platform: "linux",
-      env: originalEnv,
-    });
+    process.env.OPENTRACE_LOG = "off";
+    const platformSpy = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
     vi.doMock("node:os", () => ({
       homedir: () => "/home/testuser",
     }));
-    const { getTraceDir } = await import("./platform.js");
+    const { getTraceDir } = await import("./paths.js");
     expect(getTraceDir()).toBe("/home/testuser/.opencode-trace");
+    platformSpy.mockRestore();
   });
 });
 

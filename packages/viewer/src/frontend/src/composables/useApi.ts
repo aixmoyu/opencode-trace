@@ -1,7 +1,21 @@
 const API_BASE = "/api";
 
+declare global {
+  interface Window {
+    __TRACE_API_KEY__?: string;
+  }
+}
+
+function apiHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (window.__TRACE_API_KEY__) {
+    headers["X-API-Key"] = window.__TRACE_API_KEY__;
+  }
+  return headers;
+}
+
 export async function api<T = any>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}/${path}`);
+  const res = await fetch(`${API_BASE}/${path}`, { headers: apiHeaders() });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
@@ -10,7 +24,7 @@ export async function apiPost<T = any>(
   path: string,
   body?: BodyInit | Record<string, unknown>,
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers = apiHeaders();
   let bodyInit: BodyInit | undefined;
 
   if (body !== undefined) {
@@ -36,7 +50,10 @@ export async function apiPost<T = any>(
 }
 
 export async function apiDelete<T = any>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}/${path}`, { method: "POST" });
+  const res = await fetch(`${API_BASE}/${path}`, {
+    method: "POST",
+    headers: apiHeaders(),
+  });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

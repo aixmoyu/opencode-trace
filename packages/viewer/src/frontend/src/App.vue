@@ -123,9 +123,13 @@ function handleExport() {
 async function exportSession(sessionId: string) {
   try {
     showToast("Exporting session...", "info");
+    const headers: Record<string, string> = {};
+    if (window.__TRACE_API_KEY__) {
+      headers["X-API-Key"] = window.__TRACE_API_KEY__;
+    }
     const res = await fetch(
       `/api/sessions/${encodeURIComponent(sessionId)}/export`,
-      { method: "POST" },
+      { method: "POST", headers },
     );
     if (!res.ok) throw new Error(`Export failed: ${res.status}`);
     const blob = await res.blob();

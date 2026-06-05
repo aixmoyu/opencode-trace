@@ -102,8 +102,13 @@ async function handleFile(e: Event) {
     const formData = new FormData();
     formData.append("file", file);
 
+    const headers: Record<string, string> = {};
+    if (window.__TRACE_API_KEY__) {
+      headers["X-API-Key"] = window.__TRACE_API_KEY__;
+    }
     const res = await fetch("/api/sessions/import", {
       method: "POST",
+      headers,
       body: formData,
     });
     const result = await res.json();
@@ -139,8 +144,13 @@ async function resolveConflicts(action: string) {
     formData.append("file", pendingFile);
     formData.append("conflictStrategy", action);
 
+    const headers: Record<string, string> = {};
+    if (window.__TRACE_API_KEY__) {
+      headers["X-API-Key"] = window.__TRACE_API_KEY__;
+    }
     const res = await fetch("/api/sessions/import", {
       method: "POST",
+      headers,
       body: formData,
     });
     const result = await res.json();

@@ -8,6 +8,7 @@ const USAGE = [
   "  -p, --port <num>       Specify port (default 3210)",
   "  -d, --trace-dir <path> Read trace data from custom path instead of ~/.opencode-trace",
   "  -n, --no-open          Don't open browser automatically",
+  "  -k, --api-key <key>    Require API key for all /api/* requests",
 ].join("\n");
 
 const rawArgs = process.argv.slice(2);
@@ -15,6 +16,7 @@ const rawArgs = process.argv.slice(2);
 let traceDir: string | undefined;
 let openBrowser = true;
 let port = 3210;
+let apiKey: string | undefined;
 
 for (let i = 0; i < rawArgs.length; i++) {
   const a = rawArgs[i];
@@ -42,6 +44,14 @@ for (let i = 0; i < rawArgs.length; i++) {
     traceDir = next;
   } else if (a === "-n" || a === "--no-open") {
     openBrowser = false;
+  } else if (a === "-k" || a === "--api-key") {
+    const next = rawArgs[++i];
+    if (next === undefined) {
+      console.error("Error: -k/--api-key requires a key value");
+      console.error(USAGE);
+      process.exit(1);
+    }
+    apiKey = next;
   } else {
     console.error(`Error: unknown argument: ${a}`);
     console.error(USAGE);
@@ -49,7 +59,7 @@ for (let i = 0; i < rawArgs.length; i++) {
   }
 }
 
-createViewer({ port, open: openBrowser, traceDir }).then((instance) => {
+createViewer({ port, open: openBrowser, traceDir, apiKey }).then((instance) => {
   console.log(`opencode-trace viewer running at ${instance.url}`);
   console.log("Press Ctrl+C to stop");
 
