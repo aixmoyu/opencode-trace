@@ -425,14 +425,20 @@ export class ConfigManager {
     this.writeMetadataFile(sessionId, updated);
   }
 
-  setSessionEnabled(sessionId: string, enabled: boolean): void {
+  setSessionEnabled(sessionId: string, enabled: boolean | null): void {
     const existing = this.readMetadataFile(sessionId);
-    this.writeMetadataFile(sessionId, { ...existing, trace_enabled: enabled });
+    const updated: SessionMetadata = { ...existing };
+    if (enabled === null) {
+      delete updated.trace_enabled;
+    } else {
+      updated.trace_enabled = enabled;
+    }
+    this.writeMetadataFile(sessionId, updated);
   }
 
-  getSessionEnabled(sessionId: string): boolean {
+  getSessionEnabled(sessionId: string): boolean | null {
     const metadata = this.readMetadataFile(sessionId);
-    return metadata.trace_enabled ?? true;
+    return metadata.trace_enabled ?? null;
   }
 
   setSessionStoragePreference(sessionId: string, preference: "global" | "local"): void {
@@ -464,7 +470,7 @@ export class ConfigManager {
 
     if (!sessionId) return false;
 
-    return this.getSessionEnabled(sessionId);
+    return this.getSessionEnabled(sessionId) ?? false;
   }
 
   addSubSession(parentSessionId: string, subSessionId: string): void {

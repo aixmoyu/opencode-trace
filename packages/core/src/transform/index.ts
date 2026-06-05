@@ -1,11 +1,11 @@
 import { parseSSE } from "./sse.js";
-import type { Entry, Block, Conversation } from "../parse/types.js";
+import type { Entry, Block, Conversation } from "../model/types.js";
 import {
   createMsgEntry,
   createTextBlock,
   createThinkingBlock,
   createToolCallBlock,
-} from "../parse/utils.js";
+} from "../model/utils.js";
 import { logger } from "../logger.js";
 
 function isRecord(v: unknown): v is Record<string, unknown> {

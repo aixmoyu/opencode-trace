@@ -7,7 +7,7 @@ import {
   sseAnthropicParse,
   sseAnthropicToMessages,
 } from "./index.js";
-import type { Block, Entry } from "../parse/types.js";
+import type { Block, Entry } from "../model/types.js";
 
 function textOf(blocks: Block[]): string {
   const b = blocks[0];

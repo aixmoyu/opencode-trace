@@ -88,7 +88,7 @@ export function getGlobalTraceEnabled(traceDir?: string): boolean {
 
 export function setSessionEnabled(
   sessionId: string,
-  enabled: boolean,
+  enabled: boolean | null,
   traceDir?: string,
 ): void {
   const dir = resolveDir(traceDir);
@@ -101,7 +101,7 @@ export function setSessionEnabled(
 export function getSessionEnabled(
   sessionId: string,
   traceDir?: string,
-): boolean {
+): boolean | null {
   const dir = resolveDir(traceDir);
   const manager = getManagerSync(dir);
   if (manager) {

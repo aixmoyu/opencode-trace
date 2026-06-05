@@ -97,10 +97,10 @@ describe("record/control - Trace Enable/Disable", () => {
     expect(getGlobalTraceEnabled(testDir)).toBe(true);
   });
 
-  test("getSessionEnabled 默认返回 true", async () => {
+  test("getSessionEnabled 默认返回 null", async () => {
     const sessionId = await startRecording(undefined, testDir);
 
-    expect(getSessionEnabled(sessionId, testDir)).toBe(true);
+    expect(getSessionEnabled(sessionId, testDir)).toBe(null);
   });
 
   test("setSessionEnabled 可以设置 session 级别开关", async () => {
@@ -111,6 +111,16 @@ describe("record/control - Trace Enable/Disable", () => {
 
     setSessionEnabled(sessionId, true, testDir);
     expect(getSessionEnabled(sessionId, testDir)).toBe(true);
+  });
+
+  test("setSessionEnabled(sessionId, null) 清除 session 级别覆盖", async () => {
+    const sessionId = await startRecording(undefined, testDir);
+
+    setSessionEnabled(sessionId, true, testDir);
+    expect(getSessionEnabled(sessionId, testDir)).toBe(true);
+
+    setSessionEnabled(sessionId, null, testDir);
+    expect(getSessionEnabled(sessionId, testDir)).toBe(null);
   });
 
   test("shouldRecord 全局开时返回 true", async () => {

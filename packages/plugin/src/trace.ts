@@ -41,11 +41,17 @@ export interface TraceRecord {
 
 let testPlugin: TracePlugin | null = null;
 
+export const TRACE_HANDLED = "__TRACE_HANDLED__";
+
 export function _resetForTesting(): void {
   if (testPlugin) {
     testPlugin.uninstallInterceptor();
     testPlugin = null;
   }
+}
+
+export function _getTestPlugin(): TracePlugin | null {
+  return testPlugin;
 }
 
 function formatStatus(instance: TracePlugin, sessionId?: string): string {
@@ -277,7 +283,7 @@ const plugin: Plugin = async (input: PluginInput) => {
             }
           }
           if (hasSession) {
-            sm.setSessionEnabled(input.sessionID, false);
+            sm.setSessionEnabled(input.sessionID, null);
             disabled.push("session");
           }
 
@@ -306,7 +312,7 @@ const plugin: Plugin = async (input: PluginInput) => {
       }
 
       output.parts.length = 0;
-      throw new Error("__TRACE_HANDLED__");
+      throw new Error(TRACE_HANDLED);
     },
 
     tool: {

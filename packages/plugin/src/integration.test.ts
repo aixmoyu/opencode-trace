@@ -112,6 +112,7 @@ describe("Integration: TracePlugin full flow", () => {
 
     const sessionId = "concurrent-test";
     plugin.getStateManager()!.startSession(sessionId);
+    plugin.getGlobalConfigManager()!.setSessionEnabled(sessionId, true);
 
     const requests = Array.from({ length: 5 }, (_, i) =>
       plugin.tracedFetch(`https://example.com/${i}`, {
@@ -315,6 +316,7 @@ describe("ST2: SSE stream roundtrip", () => {
 
     const sessionId = "st2-sse";
     plugin.getStateManager()!.startSession(sessionId);
+    plugin.getGlobalConfigManager()!.setSessionEnabled(sessionId, true);
 
     const res = await plugin.tracedFetch(
       "https://api.example.com/v1/messages",
@@ -552,6 +554,7 @@ describe("ST4: corrupted record recovery", () => {
 
     const sessionId = "st4-corrupt";
     plugin.getStateManager()!.startSession(sessionId);
+    plugin.getGlobalConfigManager()!.setSessionEnabled(sessionId, true);
 
     // First request — should land as 1.json with valid JSON
     const r1 = await plugin.tracedFetch("https://example.com/a", {
@@ -668,6 +671,7 @@ describe("ST5: Windows rename retry", () => {
 
     plugin.installInterceptor();
     plugin.getStateManager()!.startSession(sessionId);
+    plugin.getGlobalConfigManager()!.setSessionEnabled(sessionId, true);
 
     const res = await plugin.tracedFetch("https://example.com/x", {
       method: "GET",

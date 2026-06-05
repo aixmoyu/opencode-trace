@@ -8,7 +8,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { logger } from "@opencode-trace/core";
-import entrypoint, { _resetForTesting } from "./trace.js";
+import entrypoint, { _resetForTesting, _getTestPlugin, TRACE_HANDLED } from "./trace.js";
 
 vi.mock("node:os", async (importOriginal) => {
   const original = await importOriginal<typeof import("node:os")>();
@@ -231,6 +231,8 @@ describe("tracedFetch stream integration", () => {
     });
 
     const sessionId = "stream-test-session";
+
+    _getTestPlugin()!.getGlobalConfigManager()!.setSessionEnabled(sessionId, true);
 
     await hooks.event!({
       event: {
@@ -627,7 +629,7 @@ async function runTraceCommand(
     error = err as Error;
   }
   expect(error).toBeTruthy();
-  expect((error as unknown as Error).message).toBe("__TRACE_HANDLED__");
+  expect((error as unknown as Error).message).toBe(TRACE_HANDLED);
   expect(output.parts.length).toBe(0);
 
   if (mockPrompt.mock.calls.length > 0) {
@@ -886,7 +888,7 @@ describe("Plugin - /trace off (slash command)", () => {
     expect(text).toContain("session");
 
     const meta = readSessionMetadata(testDir, sessionId);
-    expect(meta.trace_enabled).toBe(false);
+    expect(meta.trace_enabled).toBeUndefined();
   });
 
   test("/trace off -g -l -s disables all three scopes", async () => {
@@ -904,7 +906,7 @@ describe("Plugin - /trace off (slash command)", () => {
     expect(config.global_trace_enabled).toBe(false);
 
     const meta = readSessionMetadata(testDir, sessionId);
-    expect(meta.trace_enabled).toBe(false);
+    expect(meta.trace_enabled).toBeUndefined();
   });
 
   test("/trace disable (alias) works the same as /trace off", async () => {
@@ -958,7 +960,7 @@ describe("Plugin - /trace status (slash command)", () => {
 
     const { text } = await runTraceCommand(hooks, mockPrompt, "status -s", sessionId);
     expect(text).toContain("Trace Status");
-    expect(text).toContain(`Session : ON`);
+    expect(text).toContain(`Session : not set`);
   });
 
   test("/trace status reflects ON state after /trace on -g", async () => {
@@ -1455,7 +1457,7 @@ describe("Plugin - command.execute.before prompt error handling", () => {
       }
 
       expect(error).toBeTruthy();
-      expect((error as unknown as Error).message).toBe("__TRACE_HANDLED__");
+      expect((error as unknown as Error).message).toBe(TRACE_HANDLED);
       expect(output.parts.length).toBe(0);
       expect(errorSpy).toHaveBeenCalled();
 

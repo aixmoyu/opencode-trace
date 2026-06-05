@@ -376,14 +376,14 @@ describe("ConfigManager - Trace Enable/Disable", () => {
     expect(sessionEnabled).toBe(false);
   });
 
-  test("getSessionEnabled 默认返回 true", async () => {
+  test("getSessionEnabled 默认返回 null", async () => {
     const manager = new ConfigManager(testDir);
     await manager.init();
 
     const sessionId = manager.startSession();
 
     const sessionEnabled = manager.getSessionEnabled(sessionId);
-    expect(sessionEnabled).toBe(true);
+    expect(sessionEnabled).toBe(null);
   });
 
   test("isTraceEnabled 全局开时返回 true", async () => {
@@ -427,6 +427,29 @@ describe("ConfigManager - Trace Enable/Disable", () => {
     manager.setGlobalState("global_trace_enabled", "false");
 
     expect(manager.isTraceEnabled()).toBe(false);
+  });
+
+  test("isTraceEnabled 全局关 + session 未设置时返回 false", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    manager.setGlobalState("global_trace_enabled", "false");
+
+    const sessionId = manager.startSession();
+
+    expect(manager.isTraceEnabled(sessionId)).toBe(false);
+  });
+
+  test("setSessionEnabled(sessionId, null) 清除 session 级别覆盖", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = manager.startSession();
+    manager.setSessionEnabled(sessionId, true);
+    expect(manager.getSessionEnabled(sessionId)).toBe(true);
+
+    manager.setSessionEnabled(sessionId, null);
+    expect(manager.getSessionEnabled(sessionId)).toBe(null);
   });
 
   test("getSession 返回 enabled 字段", async () => {

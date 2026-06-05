@@ -90,7 +90,7 @@ export class TracePlugin {
 
     if (!sessionId) return false;
 
-    return this.globalConfigManager.getSessionEnabled(sessionId);
+    return this.globalConfigManager.getSessionEnabled(sessionId) ?? false;
   }
 
   getScopeStatus(sessionId?: string): ScopeStatus {

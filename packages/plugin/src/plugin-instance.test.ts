@@ -295,13 +295,22 @@ describe("TracePlugin - shouldRecord (scope resolution)", () => {
     expect(plugin.shouldRecord()).toBe(false);
   });
 
-  test("global disabled + local disabled + unknown session → true (default trace_enabled=true)", () => {
+  test("global disabled + local disabled + unknown session → false (default trace_enabled=null)", () => {
     const gcm = plugin.getGlobalConfigManager()!;
     const lcm = plugin.getLocalConfigManager()!;
     gcm.setGlobalState("global_trace_enabled", "false");
     lcm.setGlobalState("global_trace_enabled", "false");
 
-    expect(plugin.shouldRecord("never-seen")).toBe(true);
+    expect(plugin.shouldRecord("never-seen")).toBe(false);
+  });
+
+  test("global disabled + local disabled + session unset → false", () => {
+    const gcm = plugin.getGlobalConfigManager()!;
+    const lcm = plugin.getLocalConfigManager()!;
+    gcm.setGlobalState("global_trace_enabled", "false");
+    lcm.setGlobalState("global_trace_enabled", "false");
+
+    expect(plugin.shouldRecord("s1")).toBe(false);
   });
 });
 
@@ -443,7 +452,7 @@ describe("TracePlugin - session metadata operations via ConfigManager", () => {
     const gcm = plugin.getGlobalConfigManager()!;
     const sessionId = "meta-session";
 
-    expect(gcm.getSessionEnabled(sessionId)).toBe(true);
+    expect(gcm.getSessionEnabled(sessionId)).toBeNull();
 
     gcm.setSessionEnabled(sessionId, false);
     expect(gcm.getSessionEnabled(sessionId)).toBe(false);
