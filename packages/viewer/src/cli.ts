@@ -1,31 +1,52 @@
 #!/usr/bin/env node
 import { createViewer } from "./server.js";
 
+const USAGE = [
+  "Usage: opencode-trace-viewer [options]",
+  "",
+  "Options:",
+  "  -p, --port <num>       Specify port (default 3210)",
+  "  -d, --trace-dir <path> Read trace data from custom path instead of ~/.opencode-trace",
+  "  -n, --no-open          Don't open browser automatically",
+].join("\n");
+
 const rawArgs = process.argv.slice(2);
 
 let traceDir: string | undefined;
 let openBrowser = true;
-let portArg: string | undefined;
+let port = 3210;
 
 for (let i = 0; i < rawArgs.length; i++) {
   const a = rawArgs[i];
-  if (a === "--trace-dir" && i + 1 < rawArgs.length) {
-    traceDir = rawArgs[++i];
-  } else if (a === "--no-open") {
+  if (a === "-p" || a === "--port") {
+    const next = rawArgs[++i];
+    if (next === undefined) {
+      console.error("Error: -p/--port requires a port number");
+      console.error(USAGE);
+      process.exit(1);
+    }
+    const parsed = parseInt(next, 10);
+    if (isNaN(parsed)) {
+      console.error(`Error: invalid port: ${next}`);
+      console.error(USAGE);
+      process.exit(1);
+    }
+    port = parsed;
+  } else if (a === "-d" || a === "--trace-dir") {
+    const next = rawArgs[++i];
+    if (next === undefined) {
+      console.error("Error: -d/--trace-dir requires a path");
+      console.error(USAGE);
+      process.exit(1);
+    }
+    traceDir = next;
+  } else if (a === "-n" || a === "--no-open") {
     openBrowser = false;
-  } else if (!a.startsWith("--") && portArg === undefined) {
-    portArg = a;
+  } else {
+    console.error(`Error: unknown argument: ${a}`);
+    console.error(USAGE);
+    process.exit(1);
   }
-}
-
-const port = portArg ? parseInt(portArg, 10) : 3210;
-
-if (isNaN(port)) {
-  console.error("Usage: opencode-trace-viewer [port] [--no-open] [--trace-dir <path>]");
-  console.error("Default port: 3210");
-  console.error("  --no-open      Don't open browser automatically");
-  console.error("  --trace-dir    Read trace data from custom path instead of ~/.opencode-trace");
-  process.exit(1);
 }
 
 createViewer({ port, open: openBrowser, traceDir }).then((instance) => {

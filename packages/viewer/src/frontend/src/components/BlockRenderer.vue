@@ -1,5 +1,5 @@
 <template>
-  <div class="block-item" :data-block-type="block.type">
+  <div v-if="hasContent" class="block-item" :data-block-type="block.type">
     <div class="block-type-bar">
       <div class="block-type-left">
         <span :class="['block-type-tag', block.type]">{{ def.tag }}</span>

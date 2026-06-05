@@ -63,21 +63,40 @@ describe("cli", () => {
     expect(logSpy).toHaveBeenCalledWith("Press Ctrl+C to stop");
   });
 
-  it("accepts positional port arg", async () => {
-    mockInstance.url = "http://localhost:3211";
-    await loadCliWithArgs(["3211"]);
+  it("--port sets the port", async () => {
+    mockInstance.url = "http://localhost:4000";
+    await loadCliWithArgs(["--port", "4000"]);
     expect(mockCreateViewer).toHaveBeenCalledWith({
-      port: 3211,
+      port: 4000,
       open: true,
       traceDir: undefined,
     });
     expect(logSpy).toHaveBeenCalledWith(
-      "opencode-trace viewer running at http://localhost:3211",
+      "opencode-trace viewer running at http://localhost:4000",
     );
+  });
+
+  it("-p (short) sets the port", async () => {
+    mockInstance.url = "http://localhost:4001";
+    await loadCliWithArgs(["-p", "4001"]);
+    expect(mockCreateViewer).toHaveBeenCalledWith({
+      port: 4001,
+      open: true,
+      traceDir: undefined,
+    });
   });
 
   it("--no-open disables browser open", async () => {
     await loadCliWithArgs(["--no-open"]);
+    expect(mockCreateViewer).toHaveBeenCalledWith({
+      port: 3210,
+      open: false,
+      traceDir: undefined,
+    });
+  });
+
+  it("-n (short) disables browser open", async () => {
+    await loadCliWithArgs(["-n"]);
     expect(mockCreateViewer).toHaveBeenCalledWith({
       port: 3210,
       open: false,
@@ -94,9 +113,18 @@ describe("cli", () => {
     });
   });
 
-  it("combines port, --no-open and --trace-dir", async () => {
+  it("-d (short) sets traceDir", async () => {
+    await loadCliWithArgs(["-d", "/tmp/x"]);
+    expect(mockCreateViewer).toHaveBeenCalledWith({
+      port: 3210,
+      open: true,
+      traceDir: "/tmp/x",
+    });
+  });
+
+  it("combines -p, -n, -d short forms", async () => {
     mockInstance.url = "http://localhost:3211";
-    await loadCliWithArgs(["3211", "--no-open", "--trace-dir", "/tmp/x"]);
+    await loadCliWithArgs(["-p", "3211", "-n", "-d", "/tmp/x"]);
     expect(mockCreateViewer).toHaveBeenCalledWith({
       port: 3211,
       open: false,
@@ -106,17 +134,50 @@ describe("cli", () => {
 
   it("invalid port prints usage and exits with code 1", async () => {
     vi.resetModules();
-    process.argv = ["node", "cli.js", "abc"];
+    process.argv = ["node", "cli.js", "--port", "abc"];
+    await expect(import("./cli.js")).rejects.toThrow("exit_1");
+    expect(errorSpy).toHaveBeenCalledWith("Error: invalid port: abc");
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Usage: opencode-trace-viewer [options]"),
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("-p, --port <num>"),
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("-d, --trace-dir <path>"),
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("-n, --no-open"),
+    );
+    expect(mockCreateViewer).not.toHaveBeenCalled();
+  });
+
+  it("--port without value prints usage and exits with code 1", async () => {
+    vi.resetModules();
+    process.argv = ["node", "cli.js", "--port"];
     await expect(import("./cli.js")).rejects.toThrow("exit_1");
     expect(errorSpy).toHaveBeenCalledWith(
-      "Usage: opencode-trace-viewer [port] [--no-open] [--trace-dir <path>]",
+      expect.stringContaining("requires a port number"),
     );
-    expect(errorSpy).toHaveBeenCalledWith("Default port: 3210");
+    expect(mockCreateViewer).not.toHaveBeenCalled();
+  });
+
+  it("--trace-dir without value prints usage and exits with code 1", async () => {
+    vi.resetModules();
+    process.argv = ["node", "cli.js", "--trace-dir"];
+    await expect(import("./cli.js")).rejects.toThrow("exit_1");
     expect(errorSpy).toHaveBeenCalledWith(
-      "  --no-open      Don't open browser automatically",
+      expect.stringContaining("requires a path"),
     );
+    expect(mockCreateViewer).not.toHaveBeenCalled();
+  });
+
+  it("unknown argument prints usage and exits with code 1", async () => {
+    vi.resetModules();
+    process.argv = ["node", "cli.js", "--whatever"];
+    await expect(import("./cli.js")).rejects.toThrow("exit_1");
     expect(errorSpy).toHaveBeenCalledWith(
-      "  --trace-dir    Read trace data from custom path instead of ~/.opencode-trace",
+      "Error: unknown argument: --whatever",
     );
     expect(mockCreateViewer).not.toHaveBeenCalled();
   });

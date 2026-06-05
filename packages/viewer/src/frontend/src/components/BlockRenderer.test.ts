@@ -84,8 +84,26 @@ describe("BlockRenderer", () => {
     expect(wrapper.find(".toggle-btn").exists()).toBe(false);
   });
 
-  it("falls back to uppercase tag for unknown block types", () => {
+  it("hides unknown block types with no content", () => {
     const wrapper = mountBlock({ type: "weird", data: "x" } as Block);
-    expect(wrapper.find(".block-type-tag").text()).toBe("WEIRD");
+    expect(wrapper.find(".block-item").exists()).toBe(false);
+  });
+
+  it("renders nothing for a thinking block with empty content", () => {
+    const wrapper = mountBlock({ type: "thinking", thinking: "" });
+    expect(wrapper.find(".block-item").exists()).toBe(false);
+    expect(wrapper.find(".block-type-tag").exists()).toBe(false);
+    expect(wrapper.find(".block-content").exists()).toBe(false);
+  });
+
+  it("renders nothing for a text block with empty content", () => {
+    const wrapper = mountBlock({ type: "text", text: "" });
+    expect(wrapper.find(".block-item").exists()).toBe(false);
+    expect(wrapper.find(".block-type-tag").exists()).toBe(false);
+  });
+
+  it("renders nothing for an xml block with empty data", () => {
+    const wrapper = mountBlock({ type: "xml", data: "" });
+    expect(wrapper.find(".block-item").exists()).toBe(false);
   });
 });
