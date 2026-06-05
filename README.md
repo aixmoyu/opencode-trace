@@ -2,8 +2,12 @@
 
 A tool suite for tracing OpenCode AI interactions, helping debug conversations, analyze costs, and replay history.
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/@opencode-trace/core)](https://www.npmjs.com/package/@opencode-trace/core)
+
+## Demo
+
+![Demo](assets/demo.jpg)
 
 ## About
 

@@ -917,3 +917,227 @@ describe("ConfigManager - writeRecord 自动创建目录", () => {
     expect(session?.requestCount).toBe(3);
   });
 });
+
+describe("ConfigManager - readMetadataFile 错误恢复", () => {
+  test("metadata.json 内容为非法 JSON 时返回空对象不崩溃", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = manager.startSession();
+    const metaPath = join(testDir, sessionId, "metadata.json");
+    manager.updateSessionMetadata(sessionId, { title: "Before" });
+
+    writeFileSync(metaPath, "{ this is not valid json !!!");
+
+    const errorSpy = vi.spyOn(logger, "error");
+
+    const session = manager.getSession(sessionId);
+    expect(session).not.toBeNull();
+    expect(session?.title).toBeUndefined();
+
+    const call = errorSpy.mock.calls.find((c) =>
+      String(c[0]).includes("Failed to read session metadata file"),
+    );
+    expect(call).toBeDefined();
+
+    errorSpy.mockRestore();
+  });
+
+  test("metadata.json 不存在时 readMetadataFile 返回空对象", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = "no-meta-session";
+    const sessionDir = join(testDir, sessionId);
+    mkdirSync(sessionDir, { recursive: true });
+    const metaPath = join(sessionDir, "metadata.json");
+    expect(existsSync(metaPath)).toBe(false);
+
+    manager.setGlobalState("current_session", sessionId);
+
+    manager.setSessionEnabled(sessionId, true);
+    expect(manager.getSessionEnabled(sessionId)).toBe(true);
+
+    const session = manager.getSession(sessionId);
+    expect(session).not.toBeNull();
+    expect(session?.title).toBeUndefined();
+    expect(session?.parentID).toBeUndefined();
+    expect(session?.trace_enabled).toBe(true);
+  });
+
+  test("损坏 metadata 后 updateSessionMetadata 仍能写入新值", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = manager.startSession();
+    const metaPath = join(testDir, sessionId, "metadata.json");
+    writeFileSync(metaPath, "broken{{{json");
+
+    manager.updateSessionMetadata(sessionId, { title: "Recovered" });
+
+    const meta = JSON.parse(readFileSync(metaPath, "utf-8"));
+    expect(meta.title).toBe("Recovered");
+  });
+});
+
+describe("ConfigManager - updateSessionMetadata 部分字段更新", () => {
+  test("仅更新 title 不影响已有 parentID", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = manager.startSession();
+    manager.updateSessionMetadata(sessionId, { parentID: "parent-abc" });
+    manager.updateSessionMetadata(sessionId, { title: "New Title" });
+
+    const metaPath = join(testDir, sessionId, "metadata.json");
+    const meta = JSON.parse(readFileSync(metaPath, "utf-8"));
+    expect(meta.title).toBe("New Title");
+    expect(meta.parentID).toBe("parent-abc");
+  });
+
+  test("仅更新 parentID 不影响已有 title", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = manager.startSession();
+    manager.updateSessionMetadata(sessionId, { title: "Stable Title" });
+    manager.updateSessionMetadata(sessionId, { parentID: "parent-xyz" });
+
+    const metaPath = join(testDir, sessionId, "metadata.json");
+    const meta = JSON.parse(readFileSync(metaPath, "utf-8"));
+    expect(meta.title).toBe("Stable Title");
+    expect(meta.parentID).toBe("parent-xyz");
+  });
+
+  test("仅更新 folderPath 不影响已有 title 和 parentID", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = manager.startSession();
+    manager.updateSessionMetadata(sessionId, { title: "Keep" });
+    manager.updateSessionMetadata(sessionId, { parentID: "p-1" });
+    manager.updateSessionMetadata(sessionId, { folderPath: "/tmp/project" });
+
+    const metaPath = join(testDir, sessionId, "metadata.json");
+    const meta = JSON.parse(readFileSync(metaPath, "utf-8"));
+    expect(meta.title).toBe("Keep");
+    expect(meta.parentID).toBe("p-1");
+    expect(meta.folderPath).toBe("/tmp/project");
+  });
+});
+
+describe("ConfigManager - readNdjsonTiming 畸形行跳过", () => {
+  test("timeline.ndjson 含畸形行时跳过并统计有效行", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = "ndjson-session";
+    const sessionDir = join(testDir, sessionId);
+    mkdirSync(sessionDir, { recursive: true });
+
+    const goodLine1 = JSON.stringify({
+      requestAt: "2026-01-01T00:00:00Z",
+      responseAt: "2026-01-01T00:00:01Z",
+    });
+    const badLine = "THIS IS NOT JSON {{{}}}";
+    const goodLine2 = JSON.stringify({
+      requestAt: "2026-01-01T00:01:00Z",
+      responseAt: "2026-01-01T00:02:00Z",
+    });
+
+    writeFileSync(
+      join(sessionDir, "timeline.ndjson"),
+      `${goodLine1}\n${badLine}\n${goodLine2}\n`,
+    );
+
+    manager.setGlobalState("current_session", sessionId);
+
+    const session = manager.getSession(sessionId);
+    expect(session).not.toBeNull();
+    expect(session?.requestCount).toBe(2);
+    expect(session?.startedAt).toBe("2026-01-01T00:00:00Z");
+    expect(session?.endedAt).toBe("2026-01-01T00:02:00Z");
+  });
+
+  test("timeline.ndjson 全部为畸形行时返回 count 0", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = "all-bad-ndjson";
+    const sessionDir = join(testDir, sessionId);
+    mkdirSync(sessionDir, { recursive: true });
+
+    writeFileSync(
+      join(sessionDir, "timeline.ndjson"),
+      "not json\nalso not json\n",
+    );
+
+    manager.setGlobalState("current_session", sessionId);
+
+    const session = manager.getSession(sessionId);
+    expect(session).not.toBeNull();
+    expect(session?.requestCount).toBe(0);
+  });
+
+  test("timeline.ndjson 空文件返回 count 0", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = "empty-ndjson";
+    const sessionDir = join(testDir, sessionId);
+    mkdirSync(sessionDir, { recursive: true });
+
+    writeFileSync(join(sessionDir, "timeline.ndjson"), "");
+
+    manager.setGlobalState("current_session", sessionId);
+
+    const session = manager.getSession(sessionId);
+    expect(session).not.toBeNull();
+    expect(session?.requestCount).toBe(0);
+    expect(session?.startedAt).toBeNull();
+  });
+});
+
+describe("ConfigManager - writeMetadataFile 写入错误", () => {
+  test("writeMetadataFile 写入失败时错误向上传播", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = manager.startSession();
+    manager.updateSessionMetadata(sessionId, { title: "Before" });
+
+    const metaPath = join(testDir, sessionId, "metadata.json");
+    rmSync(metaPath, { force: true });
+    mkdirSync(metaPath, { recursive: true });
+
+    expect(() => {
+      manager.updateSessionMetadata(sessionId, { title: "Should Fail" });
+    }).toThrow();
+
+    rmSync(metaPath, { recursive: true, force: true });
+  });
+
+  test("writeMetadataFile 写入失败后 readMetadataFile 仍可读取旧内容", async () => {
+    const manager = new ConfigManager(testDir);
+    await manager.init();
+
+    const sessionId = manager.startSession();
+    manager.updateSessionMetadata(sessionId, { title: "Original" });
+
+    const metaPath = join(testDir, sessionId, "metadata.json");
+    const originalContent = readFileSync(metaPath, "utf-8");
+
+    rmSync(metaPath, { force: true });
+    mkdirSync(metaPath, { recursive: true });
+
+    expect(() => {
+      manager.updateSessionMetadata(sessionId, { title: "Overwrite" });
+    }).toThrow();
+
+    rmSync(metaPath, { recursive: true, force: true });
+    writeFileSync(metaPath, originalContent, "utf-8");
+
+    const session = manager.getSession(sessionId);
+    expect(session?.title).toBe("Original");
+  });
+});

@@ -1375,3 +1375,97 @@ describe("Plugin - tool.execute.after parentID eager propagation", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe("Plugin - config hook", () => {
+  test("config hook registers trace command in input.command", async () => {
+    const input: any = {
+      client: {} as any,
+      project: {} as any,
+      directory: testDir,
+      worktree: testDir,
+      experimental_workspace: { register: vi.fn() },
+      serverUrl: new URL("http://localhost"),
+      $: {} as any,
+    };
+
+    const hooks = await entrypoint.server(input);
+    await hooks.config!(input);
+
+    expect(input.command).toBeDefined();
+    expect(input.command.trace).toBeDefined();
+    expect(input.command.trace.description).toContain("/trace");
+    expect(input.command.trace.template).toBe("");
+  });
+
+  test("config hook preserves existing command entries", async () => {
+    const input: any = {
+      client: {} as any,
+      project: {} as any,
+      directory: testDir,
+      worktree: testDir,
+      experimental_workspace: { register: vi.fn() },
+      serverUrl: new URL("http://localhost"),
+      $: {} as any,
+      command: { otherCmd: { template: "", description: "Other" } },
+    };
+
+    const hooks = await entrypoint.server(input);
+    await hooks.config!(input);
+
+    expect(input.command.otherCmd).toBeDefined();
+    expect(input.command.trace).toBeDefined();
+  });
+});
+
+describe("Plugin - command.execute.before prompt error handling", () => {
+  test("handles client.session.prompt throwing an error gracefully", async () => {
+    _resetForTesting();
+    const errorSpy = vi
+      .spyOn(logger, "error")
+      .mockImplementation(((() => logger) as unknown) as never);
+
+    try {
+      const mockPrompt = vi.fn().mockRejectedValue(new Error("network failure"));
+      const hooks = await entrypoint.server({
+        client: { session: { prompt: mockPrompt } } as any,
+        project: {} as any,
+        directory: testDir,
+        worktree: testDir,
+        experimental_workspace: { register: vi.fn() },
+        serverUrl: new URL("http://localhost"),
+        $: {} as any,
+      });
+
+      const sessionId = "prompt-error-test";
+      await createSessionViaEvent(hooks, sessionId, testDir, "PromptErr");
+
+      const output = { parts: [{ type: "text", text: "original" } as any] };
+      let error: Error | null = null;
+      try {
+        await hooks["command.execute.before"]!(
+          {
+            command: "trace",
+            sessionID: sessionId,
+            arguments: "status",
+          },
+          output,
+        );
+      } catch (err) {
+        error = err as Error;
+      }
+
+      expect(error).toBeTruthy();
+      expect((error as unknown as Error).message).toBe("__TRACE_HANDLED__");
+      expect(output.parts.length).toBe(0);
+      expect(errorSpy).toHaveBeenCalled();
+
+      const errorCalls = (errorSpy.mock.calls as unknown[][]).filter(
+        (c) => c[0] === "Failed to send trace command response",
+      );
+      expect(errorCalls.length).toBe(1);
+      expect(String((errorCalls[0][1] as Record<string, unknown>).error)).toContain("network failure");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});

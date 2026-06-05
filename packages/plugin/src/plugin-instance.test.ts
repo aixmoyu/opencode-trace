@@ -12,6 +12,7 @@ import {
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { logger } from "@opencode-trace/core";
+import { promises as fsp } from "node:fs";
 
 async function waitForFile(
   filePath: string,
@@ -981,5 +982,264 @@ describe("TracePlugin - flush, wrap, getInterceptor, getSessionId", () => {
     expect(existsSync(join(tempDir, sessionId, "1.json"))).toBe(true);
     expect(existsSync(join(tempDir, sessionId, "2.json"))).toBe(true);
     expect(existsSync(join(tempDir, sessionId, "3.json"))).toBe(true);
+  });
+});
+
+describe("TracePlugin - coverage gap tests", () => {
+  let tempDir: string;
+  let plugin: TracePlugin;
+  let savedFetch: typeof fetch;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "plugin-gap-"));
+    plugin = new TracePlugin({ globalDir: tempDir, localDir: tempDir });
+    savedFetch = globalThis.fetch;
+  });
+
+  afterEach(async () => {
+    plugin.uninstallInterceptor();
+    globalThis.fetch = savedFetch;
+    await plugin.flush();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test("recordResponse captures error with sanitized stack when res.clone() throws", async () => {
+    const cloneSpy = vi.spyOn(Response.prototype, "clone").mockImplementation(() => {
+      throw new Error("response body unusable");
+    });
+
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    plugin.installInterceptor();
+
+    const sessionId = "resp-clone-err";
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: {
+        "x-opencode-session": sessionId,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ test: true }),
+    });
+
+    const res = await plugin.tracedFetch(req);
+    expect(res.status).toBe(200);
+
+    await plugin.flush();
+
+    const filePath = join(tempDir, sessionId, "1.json");
+    await waitForFile(filePath, 5000);
+    const content = JSON.parse(readFileSync(filePath, "utf-8"));
+    expect(content.response).toBeNull();
+    expect(content.error).toBeTruthy();
+    expect(content.error.message).toBe("response body unusable");
+    expect(content.error.stack).toBeTruthy();
+
+    cloneSpy.mockRestore();
+  });
+
+  test("recordResponse captures non-Error throw from res.clone()", async () => {
+    const cloneSpy = vi.spyOn(Response.prototype, "clone").mockImplementation(() => {
+      throw "raw-string-error";
+    });
+
+    globalThis.fetch = async () =>
+      new Response("ok", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      });
+    plugin.installInterceptor();
+
+    const sessionId = "resp-non-err";
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: { "x-opencode-session": sessionId },
+      body: "{}",
+    });
+
+    const res = await plugin.tracedFetch(req);
+    expect(res.status).toBe(200);
+
+    await plugin.flush();
+
+    const filePath = join(tempDir, sessionId, "1.json");
+    await waitForFile(filePath, 5000);
+    const content = JSON.parse(readFileSync(filePath, "utf-8"));
+    expect(content.response).toBeNull();
+    expect(content.error.message).toBe("raw-string-error");
+    expect(content.error.stack).toBeUndefined();
+
+    cloneSpy.mockRestore();
+  });
+
+  test("wrapStreamResponse logs error and continues stream when SSE chunk write fails", async () => {
+    const mockHandle = {
+      write: vi.fn().mockRejectedValue(new Error("disk full")),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    const _realOpen = fsp.open;
+    const openSpy = vi.spyOn(fsp, "open").mockImplementation(
+      async (path: any, flags?: any, mode?: any) => {
+        if (String(path).includes(".sse")) {
+          return mockHandle as any;
+        }
+        return _realOpen(path, flags, mode) as any;
+      },
+    );
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(
+      ((..._args: unknown[]) => logger) as never,
+    );
+
+    globalThis.fetch = async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("data: chunk1\n\n"));
+          controller.enqueue(encoder.encode("data: chunk2\n\n"));
+          controller.close();
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      });
+    };
+    plugin.installInterceptor();
+
+    const sessionId = "sse-write-err";
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: {
+        "x-opencode-session": sessionId,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ stream: true, model: "test" }),
+    });
+
+    const res = await plugin.tracedFetch(req);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain("data: chunk1");
+    expect(text).toContain("data: chunk2");
+
+    await plugin.flush();
+
+    expect(
+      errorSpy.mock.calls.some((c) =>
+        /Failed to write SSE chunk/i.test(String(c[0])),
+      ),
+    ).toBe(true);
+
+    openSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  test("wrapStreamResponse logs error when closing SSE file fails", async () => {
+    const mockHandle = {
+      write: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockRejectedValue(new Error("close failed")),
+    };
+    const _realOpen = fsp.open;
+    const openSpy = vi.spyOn(fsp, "open").mockImplementation(
+      async (path: any, flags?: any, mode?: any) => {
+        if (String(path).includes(".sse")) {
+          return mockHandle as any;
+        }
+        return _realOpen(path, flags, mode) as any;
+      },
+    );
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(
+      ((..._args: unknown[]) => logger) as never,
+    );
+
+    globalThis.fetch = async () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("data: chunk1\n\n"));
+          controller.close();
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      });
+    };
+    plugin.installInterceptor();
+
+    const sessionId = "sse-finalize-err";
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: {
+        "x-opencode-session": sessionId,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ stream: true, model: "test" }),
+    });
+
+    const res = await plugin.tracedFetch(req);
+    expect(res.status).toBe(200);
+    await res.text();
+
+    await plugin.flush();
+
+    expect(
+      errorSpy.mock.calls.some((c) =>
+        /Failed to finalize SSE file/i.test(String(c[0])),
+      ),
+    ).toBe(true);
+
+    openSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  test("captureRequestMeta falls back to empty body when clone().text() rejects", async () => {
+    const textSpy = vi.spyOn(Request.prototype, "text").mockRejectedValue(
+      new Error("body stream locked"),
+    );
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(
+      ((..._args: unknown[]) => logger) as never,
+    );
+
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    plugin.installInterceptor();
+
+    const sessionId = "clone-err-session";
+    const req = new Request("https://example.com", {
+      method: "POST",
+      headers: {
+        "x-opencode-session": sessionId,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ test: true }),
+    });
+
+    const res = await plugin.tracedFetch(req);
+    expect(res.status).toBe(200);
+
+    await plugin.flush();
+
+    const filePath = join(tempDir, sessionId, "1.json");
+    await waitForFile(filePath, 5000);
+    const content = JSON.parse(readFileSync(filePath, "utf-8"));
+
+    expect(content.request.body).toBeNull();
+    expect(content.purpose).toBe("[meta]");
+
+    expect(
+      errorSpy.mock.calls.some((c) =>
+        /Failed to clone request body/i.test(String(c[0])),
+      ),
+    ).toBe(true);
+
+    textSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 });

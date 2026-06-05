@@ -1425,4 +1425,135 @@ describe("createViewer (real integration)", () => {
       expect(response.statusCode).toBe(400);
     });
   });
+
+  describe("findSessionTraceDir dual-dir resolution", () => {
+    it("finds session in local dir when only local has metadata", async () => {
+      const localDir = join(testDir, "local-trace");
+      const globalDir = join(testDir, "global-trace");
+
+      vi.mocked(store.readSessionMetadata)
+        .mockImplementation(((sessionId: string, dir: string) => {
+          if (dir === localDir && sessionId === "local-only-session") {
+            return { title: "Local Session" } as never;
+          }
+          return null;
+        }) as never);
+
+      instance = await createViewer({
+        port: 0,
+        noListen: true,
+        globalDir,
+        localDir,
+      });
+      const response = await instance.app!.inject({
+        method: "GET",
+        url: "/api/sessions/local-only-session/timeline",
+      });
+      expect(response.statusCode).toBe(200);
+    });
+
+    it("finds session in global dir when only global has metadata", async () => {
+      const localDir = join(testDir, "local-trace");
+      const globalDir = join(testDir, "global-trace");
+
+      vi.mocked(store.readSessionMetadata)
+        .mockImplementation(((sessionId: string, dir: string) => {
+          if (dir === globalDir && sessionId === "global-only-session") {
+            return { title: "Global Session" } as never;
+          }
+          return null;
+        }) as never);
+
+      instance = await createViewer({
+        port: 0,
+        noListen: true,
+        globalDir,
+        localDir,
+      });
+      const response = await instance.app!.inject({
+        method: "GET",
+        url: "/api/sessions/global-only-session/timeline",
+      });
+      expect(response.statusCode).toBe(200);
+    });
+
+    it("returns 404 when session exists in neither dir", async () => {
+      const localDir = join(testDir, "local-trace");
+      const globalDir = join(testDir, "global-trace");
+
+      vi.mocked(store.readSessionMetadata).mockReturnValue(null);
+      vi.mocked(store.getSessionRecords).mockReturnValue([]);
+
+      instance = await createViewer({
+        port: 0,
+        noListen: true,
+        globalDir,
+        localDir,
+      });
+      const response = await instance.app!.inject({
+        method: "GET",
+        url: "/api/sessions/nonexistent-session/timeline",
+      });
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual({ error: "Session not found" });
+    });
+
+    it("prefers local dir over global when session exists in both", async () => {
+      const localDir = join(testDir, "local-trace");
+      const globalDir = join(testDir, "global-trace");
+
+      vi.mocked(store.readSessionMetadata)
+        .mockImplementation(((sessionId: string, dir: string) => {
+          if (sessionId === "both-dir-session") {
+            return { title: dir === localDir ? "Local" : "Global" } as never;
+          }
+          return null;
+        }) as never);
+      vi.mocked(store.readTimelineIndex).mockReturnValue([]);
+      vi.mocked(store.getSessionRecords).mockReturnValue([]);
+
+      instance = await createViewer({
+        port: 0,
+        noListen: true,
+        globalDir,
+        localDir,
+      });
+
+      const response = await instance.app!.inject({
+        method: "GET",
+        url: "/api/sessions/both-dir-session",
+      });
+      expect(response.statusCode).toBe(200);
+
+      const calls = vi.mocked(store.getSessionRecords).mock.calls;
+      const usedDir = calls.length > 0 ? calls[calls.length - 1][1]?.traceDir : null;
+      expect(usedDir).toBe(localDir);
+    });
+
+    it("finds session in local dir via records when metadata is null", async () => {
+      const localDir = join(testDir, "local-trace");
+      const globalDir = join(testDir, "global-trace");
+
+      vi.mocked(store.readSessionMetadata).mockReturnValue(null);
+      vi.mocked(store.getSessionRecords)
+        .mockImplementation(((sessionId: string, opts?: any) => {
+          if (opts?.traceDir === localDir && sessionId === "local-records-only") {
+            return [mockRecord];
+          }
+          return [];
+        }) as never);
+
+      instance = await createViewer({
+        port: 0,
+        noListen: true,
+        globalDir,
+        localDir,
+      });
+      const response = await instance.app!.inject({
+        method: "GET",
+        url: "/api/sessions/local-records-only",
+      });
+      expect(response.statusCode).toBe(200);
+    });
+  });
 });

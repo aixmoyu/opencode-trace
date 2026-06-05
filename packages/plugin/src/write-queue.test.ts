@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
-import { AsyncWriteQueue } from "./write-queue.js";
+import { AsyncWriteQueue, TimelineEntry } from "./write-queue.js";
 import { logger } from "@opencode-trace/core";
 import {
   mkdtempSync,
@@ -592,5 +592,144 @@ describe("AsyncWriteQueue.close()", () => {
   test("close() is idempotent — second call is a no-op", async () => {
     await queue.close();
     await expect(queue.close()).resolves.toBeUndefined();
+  });
+});
+
+describe("AsyncWriteQueue: remaining coverage gaps", () => {
+  let tempDir: string;
+  let queue: AsyncWriteQueue;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "write-queue-gaps-"));
+    queue = new AsyncWriteQueue(tempDir);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test("enqueue with custom traceDir writes files to override directory", async () => {
+    const overrideDir = mkdtempSync(join(tmpdir(), "write-queue-tracedir-override-"));
+    try {
+      const record = makeRecord(1, "override-tracedir");
+      queue.enqueue("session-override", 1, record, undefined, overrideDir);
+      await queue.flush();
+
+      expect(existsSync(join(overrideDir, "session-override", "1.json"))).toBe(true);
+      expect(existsSync(join(tempDir, "session-override", "1.json"))).toBe(false);
+
+      const content = JSON.parse(
+        readFileSync(join(overrideDir, "session-override", "1.json"), "utf-8"),
+      );
+      expect(content).toEqual(record);
+    } finally {
+      rmSync(overrideDir, { recursive: true, force: true });
+    }
+  });
+
+  test("enqueue with timelineEntry appends to timeline.ndjson with correct line format", async () => {
+    const record = makeRecord(1, "timeline-test");
+    const entry: TimelineEntry = {
+      seq: 1,
+      url: "https://example.com/timeline",
+      method: "POST",
+      purpose: "timeline-test",
+      requestAt: "2026-05-07T00:00:00Z",
+      responseAt: "2026-05-07T00:00:01Z",
+      status: 200,
+      provider: "openai",
+      model: "gpt-4",
+      inputTokens: 100,
+      outputTokens: 50,
+      totalDurationMs: 1500,
+    };
+    queue.enqueue("session-tl", 1, record, entry);
+    await queue.flush();
+
+    const timelinePath = join(tempDir, "session-tl", "timeline.ndjson");
+    expect(existsSync(timelinePath)).toBe(true);
+
+    const content = readFileSync(timelinePath, "utf-8");
+    expect(content.endsWith("\n")).toBe(true);
+    const lines = content.trim().split("\n");
+    expect(lines.length).toBe(1);
+    expect(JSON.parse(lines[0])).toEqual(entry);
+  });
+
+  test("multiple enqueue calls with timelineEntries append multiple ndjson lines", async () => {
+    const entry1: TimelineEntry = {
+      seq: 1,
+      url: "https://example.com/1",
+      method: "POST",
+      purpose: "tl-multi-1",
+      requestAt: "2026-05-07T00:00:00Z",
+      responseAt: "2026-05-07T00:00:01Z",
+      status: 200,
+      provider: "openai",
+      model: "gpt-4",
+      inputTokens: 100,
+      outputTokens: 50,
+      totalDurationMs: 1500,
+    };
+    const entry2: TimelineEntry = {
+      seq: 2,
+      url: "https://example.com/2",
+      method: "GET",
+      purpose: "tl-multi-2",
+      requestAt: "2026-05-07T00:00:02Z",
+      responseAt: "2026-05-07T00:00:03Z",
+      status: 200,
+      provider: "anthropic",
+      model: "claude-3",
+      inputTokens: 200,
+      outputTokens: 80,
+      totalDurationMs: 2500,
+    };
+
+    queue.enqueue("session-multi-tl", 1, makeRecord(1, "tl-multi-1"), entry1);
+    queue.enqueue("session-multi-tl", 2, makeRecord(2, "tl-multi-2"), entry2);
+    await queue.flush();
+
+    const timelinePath = join(tempDir, "session-multi-tl", "timeline.ndjson");
+    const content = readFileSync(timelinePath, "utf-8");
+    const lines = content.trim().split("\n");
+    expect(lines.length).toBe(2);
+    expect(JSON.parse(lines[0])).toEqual(entry1);
+    expect(JSON.parse(lines[1])).toEqual(entry2);
+  });
+
+  test("writing flag prevents double-processing when enqueue is called during active writeBatch", async () => {
+    const realWriteFile = fs.writeFile.bind(fs);
+    let writeCalls = 0;
+    const writeFileSpy = vi
+      .spyOn(fs, "writeFile")
+      .mockImplementation(async (...args: Parameters<typeof fs.writeFile>) => {
+        writeCalls++;
+        if (writeCalls === 1) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        return realWriteFile(...args);
+      });
+
+    queue.enqueue("reentry-guard", 1, makeRecord(1, "reentry-first"));
+    await new Promise((r) => setTimeout(r, 20));
+    queue.enqueue("reentry-guard", 2, makeRecord(2, "reentry-second"));
+
+    await queue.flush();
+
+    expect(existsSync(join(tempDir, "reentry-guard", "1.json"))).toBe(true);
+    expect(existsSync(join(tempDir, "reentry-guard", "2.json"))).toBe(true);
+
+    const content1 = JSON.parse(
+      readFileSync(join(tempDir, "reentry-guard", "1.json"), "utf-8"),
+    );
+    expect(content1.id).toBe(1);
+    const content2 = JSON.parse(
+      readFileSync(join(tempDir, "reentry-guard", "2.json"), "utf-8"),
+    );
+    expect(content2.id).toBe(2);
+
+    expect(writeFileSpy).toHaveBeenCalledTimes(2);
   });
 });

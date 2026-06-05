@@ -539,3 +539,294 @@ describe("collapseConversations", () => {
     expect(result.blocks.size).toBe(0);
   });
 });
+
+describe("collapseConversation XML format", () => {
+  it("should collapse msgs with _xmlRef in XML format", () => {
+    const conv: Conversation = {
+      provider: "anthropic",
+      model: "claude-3",
+      msgs: [
+        {
+          id: "msg-1",
+          role: "user",
+          blocks: [{ type: "text", text: "Hello" },
+            { type: "tr", toolCallId: "t1", content: "r1" }],
+        },
+        {
+          id: "msg-2",
+          role: "assistant",
+          blocks: [{ type: "text", text: "Reply" }],
+        },
+      ],
+      stream: true,
+      usage: null,
+    };
+    const result = collapseConversation(conv, 1, {
+      collapse: ["msgs"],
+      format: "xml",
+    });
+
+    expect((result.conversation.msgs[0] as any)._xmlRef).toBe(
+      "blocks/req-1-msgs.xml",
+    );
+    expect((result.conversation.msgs[0] as any).id).toBe("msgs");
+    expect((result.conversation.msgs[0] as any).blocks).toEqual([]);
+    expect(result.files.has("blocks/req-1-msgs.xml")).toBe(true);
+    const msgsFile = result.files.get("blocks/req-1-msgs.xml");
+    expect(msgsFile).toContain('<entry id="msg-1"');
+    expect(msgsFile).toContain('<entry id="msg-2"');
+  });
+
+  it("should collapse sys entry with _xmlRef in XML format", () => {
+    const conv: Conversation = {
+      provider: "anthropic",
+      model: null,
+      sys: { id: "sys-1", blocks: [{ type: "text", text: "System" }] },
+      msgs: [{ id: "msg-1", blocks: [{ type: "text", text: "Hi" }] }],
+      stream: true,
+      usage: null,
+    };
+    const result = collapseConversation(conv, 2, {
+      collapse: ["sys"],
+      format: "xml",
+    });
+
+    expect((result.conversation.sys as any)._xmlRef).toBe(
+      "blocks/req-2-sys.xml",
+    );
+    expect((result.conversation.sys as any).id).toBe("sys-1");
+    expect((result.conversation.sys as any).blocks).toEqual([
+      { type: "text", text: "System" },
+    ]);
+    expect(result.files.has("blocks/req-2-sys.xml")).toBe(true);
+  });
+
+  it("should collapse tool entry with _xmlRef in XML format", () => {
+    const conv: Conversation = {
+      provider: "openai",
+      model: null,
+      tool: {
+        id: "tool-1",
+        blocks: [
+          { type: "td", name: "bash", description: null, inputSchema: {} },
+        ],
+      },
+      msgs: [{ id: "msg-1", blocks: [{ type: "text", text: "Hi" }] }],
+      stream: false,
+      usage: null,
+    };
+    const result = collapseConversation(conv, 3, {
+      collapse: ["tool"],
+      format: "xml",
+    });
+
+    expect((result.conversation.tool as any)._xmlRef).toBe(
+      "blocks/req-3-tool.xml",
+    );
+    expect((result.conversation.tool as any).id).toBe("tool-1");
+    expect(result.files.has("blocks/req-3-tool.xml")).toBe(true);
+  });
+
+  it("should populate xmlRefs on blocks in XML format with collapseBlocks", () => {
+    const conv: Conversation = {
+      provider: "anthropic",
+      model: null,
+      msgs: [
+        {
+          id: "msg-1",
+          role: "assistant",
+          blocks: [
+            { type: "text", text: "Hi" },
+            { type: "tr", toolCallId: "t1", content: "result" },
+          ],
+        },
+      ],
+      stream: true,
+      usage: { inputMissTokens: 10, inputHitTokens: 0, outputTokens: 20 },
+    };
+    const result = collapseConversation(conv, 4, {
+      collapseBlocks: ["tr"],
+      format: "xml",
+    });
+
+    expect(result.conversation.msgs[0].blocks[0]).toEqual({
+      type: "text",
+      text: "Hi",
+    });
+    expect(result.conversation.msgs[0].blocks[1]).toEqual({
+      type: "tr",
+      toolCallId: "t1",
+      content: "result",
+    });
+    expect(result.files.has("blocks/req-4-tr-t1.xml")).toBe(true);
+    expect(result.files.size).toBe(1);
+  });
+});
+
+describe("collapseDelta XML format", () => {
+  it("should collapse msgs with _xmlRef in XML format", () => {
+    const delta: Delta = {
+      msgs: [
+        { id: "msg-1", added: [{ type: "text", text: "Hello" }] },
+        { id: "msg-2", added: [{ type: "text", text: "Reply" }] },
+      ],
+    };
+    const result = collapseDelta(delta, 1, {
+      collapse: ["msgs"],
+      format: "xml",
+    });
+
+    expect((result.delta.msgs[0] as any)._xmlRef).toBe(
+      "blocks/req-1-msgs.xml",
+    );
+    expect((result.delta.msgs[0] as any).id).toBe("msgs");
+    expect((result.delta.msgs[0] as any).added).toEqual([]);
+    expect(result.files.has("blocks/req-1-msgs.xml")).toBe(true);
+    const msgsFile = result.files.get("blocks/req-1-msgs.xml");
+    expect(msgsFile).toContain('<entryDelta id="msg-1"');
+    expect(msgsFile).toContain('<entryDelta id="msg-2"');
+  });
+
+  it("should collapse tool EntryDelta with _xmlRef in XML format", () => {
+    const delta: Delta = {
+      tool: {
+        id: "tool-1",
+        removed: [
+          { type: "td", name: "bash", description: null, inputSchema: {} },
+        ],
+      },
+      msgs: [],
+    };
+    const result = collapseDelta(delta, 2, {
+      collapse: ["tool"],
+      format: "xml",
+    });
+
+    expect((result.delta.tool as any)._xmlRef).toBe(
+      "blocks/req-2-tool.xml",
+    );
+    expect((result.delta.tool as any).id).toBe("tool-1");
+    expect(result.files.has("blocks/req-2-tool.xml")).toBe(true);
+  });
+});
+
+describe("collapseDeltas XML format", () => {
+  it("should produce XML main output with deltasMapToCollapsedXML", () => {
+    const deltas: Record<number, Delta> = {
+      1: {
+        sys: { id: "s1", added: [{ type: "text", text: "Sys1" }] },
+        msgs: [{ id: "m1", added: [{ type: "text", text: "Msg1" }] }],
+      },
+      2: {
+        tool: {
+          id: "t1",
+          removed: [
+            { type: "td", name: "bash", description: null, inputSchema: {} },
+          ],
+        },
+        msgs: [{ id: "m2", added: [{ type: "text", text: "Msg2" }] }],
+      },
+    };
+    const result = collapseDeltas(deltas, {
+      collapse: ["sys", "tool"],
+      format: "xml",
+    });
+
+    expect(result.main).toContain("<deltas>");
+    expect(result.main).toContain('<delta reqId="1"');
+    expect(result.main).toContain('<delta reqId="2"');
+    expect(result.main).toContain('<sys ref="blocks/req-1-sys.xml"/>');
+    expect(result.main).toContain('<tool ref="blocks/req-2-tool.xml"/>');
+    expect(result.main).toContain("</deltas>");
+    expect(result.blocks.size).toBe(2);
+  });
+});
+
+describe("collapseConversations XML format", () => {
+  it("should produce XML main output with conversationsMapToCollapsedXML", () => {
+    const conversations: Record<number, Conversation> = {
+      1: {
+        provider: "anthropic",
+        model: "claude-3",
+        sys: { id: "sys-1", blocks: [{ type: "text", text: "System" }] },
+        tool: {
+          id: "tool-1",
+          blocks: [
+            { type: "td", name: "bash", description: null, inputSchema: {} },
+          ],
+        },
+        msgs: [
+          {
+            id: "msg-1",
+            role: "user",
+            blocks: [{ type: "text", text: "Hi" }],
+          },
+        ],
+        stream: true,
+        usage: { inputMissTokens: 10, inputHitTokens: 0, outputTokens: 5 },
+      },
+    };
+    const result = collapseConversations(conversations, {
+      collapse: ["sys", "tool"],
+      format: "xml",
+    });
+
+    expect(result.main).toContain("<conversations>");
+    expect(result.main).toContain('<conversation reqId="1"');
+    expect(result.main).toContain("<provider>anthropic</provider>");
+    expect(result.main).toContain("<model>claude-3</model>");
+    expect(result.main).toContain('<sys ref="blocks/req-1-sys.xml"/>');
+    expect(result.main).toContain('<tool ref="blocks/req-1-tool.xml"/>');
+    expect(result.main).toContain("<msgs>");
+    expect(result.main).toContain("</conversations>");
+    expect(result.blocks.size).toBe(2);
+  });
+
+  it("should render inline sys/tool entries without _xmlRef in XML", () => {
+    const conversations: Record<number, Conversation> = {
+      1: {
+        provider: "anthropic",
+        model: null,
+        sys: { id: "sys-1", blocks: [{ type: "text", text: "System" }] },
+        msgs: [{ id: "msg-1", blocks: [{ type: "text", text: "Hi" }] }],
+        stream: true,
+        usage: null,
+      },
+    };
+    const result = collapseConversations(conversations, {
+      format: "xml",
+    });
+
+    expect(result.main).toContain("<sys>");
+    expect(result.main).toContain('<entry id="sys-1"');
+    expect(result.main).toContain("</sys>");
+    expect(result.blocks.size).toBe(0);
+  });
+
+  it("should collapse msgs and render ref in XML main output", () => {
+    const conversations: Record<number, Conversation> = {
+      1: {
+        provider: "anthropic",
+        model: null,
+        msgs: [
+          {
+            id: "msg-1",
+            role: "user",
+            blocks: [{ type: "text", text: "Hello" }],
+          },
+        ],
+        stream: true,
+        usage: null,
+      },
+    };
+    const result = collapseConversations(conversations, {
+      collapse: ["msgs"],
+      format: "xml",
+    });
+
+    expect(result.main).toContain('<msgs ref="blocks/req-1-msgs.xml"/>');
+    expect(result.blocks.size).toBe(1);
+    const msgsContent = result.blocks.get("blocks/req-1-msgs.xml");
+    expect(msgsContent).toContain('<entry id="msg-1"');
+  });
+});

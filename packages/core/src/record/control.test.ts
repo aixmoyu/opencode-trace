@@ -5,6 +5,7 @@ import {
   mkdirSync,
   existsSync,
   readFileSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -261,5 +262,109 @@ describe("record/control - stopRecording 边界", () => {
 describe("record/control - isRecording 边界", () => {
   test("isRecording 对未知 session 返回 false", () => {
     expect(isRecording("never-existed", testDir)).toBe(false);
+  });
+});
+
+describe("record/control - filesystem fallback (no StateManager)", () => {
+  const MARKER = ".recording";
+
+  function createSessionWithMarker(sessionId: string, markerContent: object | string) {
+    mkdirSync(join(testDir, sessionId), { recursive: true });
+    const content = typeof markerContent === "string" ? markerContent : JSON.stringify(markerContent);
+    writeFileSync(join(testDir, sessionId, MARKER), content, "utf-8");
+  }
+
+  function createSessionDir(sessionId: string) {
+    mkdirSync(join(testDir, sessionId), { recursive: true });
+  }
+
+  test("listRecordings without StateManager scans traceDir for session dirs with markers", () => {
+    createSessionWithMarker("sess-fs-1", { startedAt: "2024-01-01T00:00:00Z" });
+    createSessionWithMarker("sess-fs-2", { startedAt: "2024-01-02T00:00:00Z" });
+
+    const recordings = listRecordings(testDir);
+    expect(recordings).toHaveLength(2);
+    expect(recordings.map(r => r.sessionId)).toContain("sess-fs-1");
+    expect(recordings.map(r => r.sessionId)).toContain("sess-fs-2");
+    expect(recordings.every(r => r.active)).toBe(true);
+  });
+
+  test("listRecordings without StateManager skips dirs without markers", () => {
+    createSessionWithMarker("sess-fs-with", { startedAt: "2024-01-01T00:00:00Z" });
+    createSessionDir("sess-fs-no-marker");
+
+    const recordings = listRecordings(testDir);
+    expect(recordings).toHaveLength(1);
+    expect(recordings[0].sessionId).toBe("sess-fs-with");
+  });
+
+  test("listRecordings with unreadable traceDir returns empty array", () => {
+    const badDir = join(tmpdir(), "nonexistent-dir-for-test-" + Date.now());
+    expect(listRecordings(badDir)).toEqual([]);
+  });
+
+  test("stopRecording without StateManager removes .recording marker and returns true", () => {
+    createSessionWithMarker("sess-fs-stop", { startedAt: "2024-01-01T00:00:00Z" });
+
+    expect(existsSync(join(testDir, "sess-fs-stop", MARKER))).toBe(true);
+    const result = stopRecording("sess-fs-stop", testDir);
+    expect(result).toBe(true);
+    expect(existsSync(join(testDir, "sess-fs-stop", MARKER))).toBe(false);
+  });
+
+  test("stopRecording without StateManager returns false when marker missing", () => {
+    createSessionDir("sess-fs-stop-missing");
+
+    expect(stopRecording("sess-fs-stop-missing", testDir)).toBe(false);
+  });
+
+  test("stopRecording without StateManager returns false for nonexistent session", () => {
+    expect(stopRecording("never-existed-fs", testDir)).toBe(false);
+  });
+
+  test("isRecording without StateManager returns true when marker exists", () => {
+    createSessionWithMarker("sess-fs-isrec", { startedAt: "2024-01-01T00:00:00Z" });
+
+    expect(isRecording("sess-fs-isrec", testDir)).toBe(true);
+  });
+
+  test("isRecording without StateManager returns false when marker missing", () => {
+    createSessionDir("sess-fs-isrec-no");
+
+    expect(isRecording("sess-fs-isrec-no", testDir)).toBe(false);
+  });
+
+  test("isRecording without StateManager returns false for nonexistent session", () => {
+    expect(isRecording("never-existed-fs", testDir)).toBe(false);
+  });
+
+  test("getRecordingStatus without StateManager reads marker content", () => {
+    const startedAt = "2024-01-01T00:00:00Z";
+    createSessionWithMarker("sess-fs-status", { startedAt });
+
+    const status = getRecordingStatus("sess-fs-status", testDir);
+    expect(status.active).toBe(true);
+    expect(status.sessionId).toBe("sess-fs-status");
+    expect(status.startedAt).toBe(startedAt);
+  });
+
+  test("getRecordingStatus without StateManager returns active:false when marker missing", () => {
+    createSessionDir("sess-fs-status-no");
+
+    const status = getRecordingStatus("sess-fs-status-no", testDir);
+    expect(status).toEqual({ active: false });
+  });
+
+  test("getRecordingStatus without StateManager returns active:true on malformed marker", () => {
+    createSessionWithMarker("sess-fs-status-bad", "not-valid-json");
+
+    const status = getRecordingStatus("sess-fs-status-bad", testDir);
+    expect(status.active).toBe(true);
+    expect(status.sessionId).toBe("sess-fs-status-bad");
+    expect(status.startedAt).toBeUndefined();
+  });
+
+  test("getRecordingStatus without StateManager for nonexistent session returns active:false", () => {
+    expect(getRecordingStatus("never-existed-fs", testDir)).toEqual({ active: false });
   });
 });
