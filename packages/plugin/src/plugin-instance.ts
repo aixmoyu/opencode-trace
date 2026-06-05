@@ -1,7 +1,7 @@
 import { AsyncWriteQueue, TimelineEntry } from "./write-queue.js";
 import { redactHeaders } from "./redact.js";
 import { sanitizePath, parse, logger } from "@opencode-trace/core";
-import { ConfigManager } from "@opencode-trace/core/state";
+import { ConfigManager, initConfigManager } from "@opencode-trace/core/state";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promises as fs } from "node:fs";
@@ -46,11 +46,8 @@ export class TracePlugin {
   }
 
   async initStateManager(): Promise<void> {
-    this.globalConfigManager = new ConfigManager(this.globalDir);
-    await this.globalConfigManager.init();
-
-    this.localConfigManager = new ConfigManager(this.localDir);
-    await this.localConfigManager.init();
+    this.globalConfigManager = await initConfigManager(this.globalDir);
+    this.localConfigManager = await initConfigManager(this.localDir);
   }
 
   getStateManager(): ConfigManager | null {

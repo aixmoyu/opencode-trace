@@ -24,7 +24,6 @@ import {
   getSessionStoragePreference,
   setStoragePreference,
   getStoragePreference,
-  syncState,
   initStateManager,
 } from "./control.js";
 
@@ -192,30 +191,12 @@ describe("record/control - Storage Preference", () => {
   });
 });
 
-describe("record/control - StateManager init/sync", () => {
+describe("record/control - StateManager init", () => {
   test("initStateManager 初始化后 isRecording 可用", async () => {
     await initStateManager(testDir);
 
     const sessionId = await startRecording(undefined, testDir);
     expect(isRecording(sessionId, testDir)).toBe(true);
-  });
-
-  test("syncState 重新加载磁盘上的 config", async () => {
-    const sessionId = await startRecording(undefined, testDir);
-
-    setGlobalTraceEnabled(true, testDir);
-    expect(getGlobalTraceEnabled(testDir)).toBe(true);
-
-    setGlobalTraceEnabled(false, testDir);
-    expect(getGlobalTraceEnabled(testDir)).toBe(false);
-
-    syncState(testDir);
-
-    expect(getGlobalTraceEnabled(testDir)).toBe(false);
-  });
-
-  test("syncState 在没有 manager 时为 noop", () => {
-    expect(() => syncState(testDir)).not.toThrow();
   });
 });
 

@@ -165,8 +165,6 @@ opencode-trace status -g -l -s <id>      # View all scope statuses
 
 # Session management
 opencode-trace list                # List all sessions
-opencode-trace sync                # Sync SQLite with filesystem
-opencode-trace sync --repair       # Rebuild corrupted state.db
 
 # Data viewing
 opencode-trace show <id> metadata                    # Show session metadata

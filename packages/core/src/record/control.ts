@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { getTraceDir } from "../paths.js";
-import { ConfigManager, SessionState } from "../state/index.js";
+import { ConfigManager, SessionState, initConfigManager, getConfigManager, hasConfigManager } from "../state/index.js";
 import { logger } from "../logger.js";
 
 const RECORDING_MARKER = ".recording";
@@ -16,21 +16,12 @@ function resolveDir(traceDir?: string): string {
   return traceDir ?? getTraceDir();
 }
 
-const managers = new Map<string, ConfigManager>();
-const initPromises = new Map<string, Promise<void>>();
-
 async function getManager(traceDir: string): Promise<ConfigManager> {
-  if (!managers.has(traceDir)) {
-    const manager = new ConfigManager(traceDir);
-    managers.set(traceDir, manager);
-    initPromises.set(traceDir, manager.init());
-  }
-  await initPromises.get(traceDir);
-  return managers.get(traceDir)!;
+  return initConfigManager(traceDir);
 }
 
 function getManagerSync(traceDir: string): ConfigManager | null {
-  return managers.get(traceDir) ?? null;
+  return hasConfigManager(traceDir) ? getConfigManager(traceDir) : null;
 }
 
 function sessionToRecording(session: SessionState | null): RecordingStatus {
@@ -251,12 +242,4 @@ export function listRecordings(traceDir?: string): RecordingStatus[] {
 export async function initStateManager(traceDir?: string): Promise<void> {
   const dir = resolveDir(traceDir);
   await getManager(dir);
-}
-
-export function syncState(traceDir?: string): void {
-  const dir = resolveDir(traceDir);
-  const manager = getManagerSync(dir);
-  if (manager) {
-    manager.reloadConfig();
-  }
 }

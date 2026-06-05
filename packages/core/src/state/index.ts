@@ -490,4 +490,26 @@ function normalizeStoragePreference(value: unknown): "global" | "local" {
   return "global";
 }
 
+const registry = new Map<string, ConfigManager>();
+const registryInitPromises = new Map<string, Promise<void>>();
+
+export function hasConfigManager(traceDir: string): boolean {
+  return registry.has(traceDir);
+}
+
+export function getConfigManager(traceDir: string): ConfigManager {
+  if (!registry.has(traceDir)) {
+    const manager = new ConfigManager(traceDir);
+    registry.set(traceDir, manager);
+    registryInitPromises.set(traceDir, manager.init());
+  }
+  return registry.get(traceDir)!;
+}
+
+export async function initConfigManager(traceDir: string): Promise<ConfigManager> {
+  const manager = getConfigManager(traceDir);
+  await registryInitPromises.get(traceDir);
+  return manager;
+}
+
 export type StateManager = ConfigManager;

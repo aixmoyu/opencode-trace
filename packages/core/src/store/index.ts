@@ -12,7 +12,7 @@ import archiver from "archiver";
 import AdmZip from "adm-zip";
 import { getTraceDir as getDefaultTraceDir } from "../paths.js";
 import type { TraceRecord } from "../types.js";
-import { ConfigManager, SessionState } from "../state/index.js";
+import { ConfigManager, SessionState, initConfigManager, getConfigManager, hasConfigManager } from "../state/index.js";
 import { TraceRecordSchema } from "../schemas/types.js";
 import { SessionMetadataFileSchema } from "../schemas/store-types.js";
 import { PARSED_CACHE_VERSION } from "../parse/index.js";
@@ -84,21 +84,12 @@ function safeReaddir(dir: string): string[] {
   }
 }
 
-const managers = new Map<string, ConfigManager>();
-const initPromises = new Map<string, Promise<void>>();
-
 async function getManager(traceDir: string): Promise<ConfigManager> {
-  if (!managers.has(traceDir)) {
-    const manager = new ConfigManager(traceDir);
-    managers.set(traceDir, manager);
-    initPromises.set(traceDir, manager.init());
-  }
-  await initPromises.get(traceDir);
-  return managers.get(traceDir)!;
+  return initConfigManager(traceDir);
 }
 
 function getManagerSync(traceDir: string): ConfigManager | null {
-  return managers.get(traceDir) ?? null;
+  return hasConfigManager(traceDir) ? getConfigManager(traceDir) : null;
 }
 
 function sessionStateToMeta(session: SessionState): SessionMeta {

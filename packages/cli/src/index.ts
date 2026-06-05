@@ -3,7 +3,6 @@ import { cmdEnable } from "./handlers/enable.js";
 import { cmdDisable } from "./handlers/disable.js";
 import { cmdStatus } from "./handlers/status.js";
 import { cmdList } from "./handlers/list.js";
-import { cmdSync } from "./handlers/sync.js";
 import { cmdShow } from "./handlers/show.js";
 import { cmdExport } from "./handlers/export.js";
 import { cmdViewer } from "./handlers/viewer.js";
@@ -51,8 +50,6 @@ Commands:
                                   -r: request range (not for raw)
                                   --collapse: top-level collapse (sys,tool,msgs)
                                   --collapse-blocks: block types (text,thinking,td,tc,tr,image,other)
-sync [--repair]                 Sync filesystem indexes
-                                   --repair: rebuild corrupted config.json
   viewer [options]                Start web viewer
                                   Options: --port <num>, --no-open
   help                            Show this help message
@@ -66,7 +63,7 @@ async function main() {
   if (!command) {
     console.error("Usage: opencode-trace <command> [options]");
     console.error(
-      "Commands: enable, disable, status, list, sync, show, export",
+      "Commands: enable, disable, status, list, show, export",
     );
     process.exit(1);
   }
@@ -83,7 +80,6 @@ async function main() {
     console.error("  disable [-g] [-l] [-s <id>]                    - Disable trace recording");
     console.error("  status [-g] [-l] [-s <id>]                     - Show trace status");
     console.error("  list                                            - List all sessions");
-    console.error("  sync [--repair]                                 - Sync trace data");
     console.error("  viewer [options]                                - Start web viewer");
     console.error("  show <type> <session>                           - Show trace data");
     console.error("  export <type> <session>                         - Export trace data");
@@ -104,9 +100,6 @@ async function main() {
       break;
     case "list":
       cmdList(handlerArgs);
-      break;
-    case "sync":
-      await cmdSync(handlerArgs);
       break;
     case "show":
       await cmdShow(handlerArgs);

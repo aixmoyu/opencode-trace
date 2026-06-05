@@ -5,7 +5,6 @@ export {
   getRecordingStatus,
   listRecordings,
   initStateManager,
-  syncState,
   setGlobalTraceEnabled,
   getGlobalTraceEnabled,
   setSessionEnabled,
