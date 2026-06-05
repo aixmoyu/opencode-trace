@@ -60,6 +60,21 @@ This project runs CI on both Linux and Windows. File system behavior differs sig
   may not immediately reflect completed writes.
 - **Test timeouts on Windows need margin**. The default `waitForFiles` timeout (5s) is sufficient
   but tight on Windows CI. If tests become flaky, increase rather than decrease.
+- **Tests MUST build file paths with `path.join` / `path.resolve` + `os.tmpdir()`**. Hardcoded
+  POSIX-style paths in assertions (e.g. `expect(writeFileSync).toHaveBeenCalledWith("/tmp/out/main.json", ...)`)
+  are a CI trap: on Linux they happen to match `path.join("/tmp/out", "main.json")`, but on
+  Windows `path.join` produces backslashes (`\\tmp\\out\\main.json`) and `path.resolve` on a
+  POSIX-style absolute path prepends the cwd drive (e.g. `D:\tmp\out\main.json`). Always
+  build both the test input and the expected value with the same `path` helpers used by the
+  implementation. Example:
+  ```ts
+  import { tmpdir } from "node:os";
+  import { join, resolve } from "node:path";
+
+  const OUT = resolve(join(tmpdir(), "metadata-out.json"));
+  await cmdExport(["-o", OUT]);                       // input
+  expect(writeFileSync).toHaveBeenCalledWith(OUT, …); // expected (same value on every OS)
+  ```
 
 ### MUST NOT Do
 - **NEVER use bare `fs.rename()` for production write paths**. Always use `safeRename()` from
@@ -68,6 +83,11 @@ This project runs CI on both Linux and Windows. File system behavior differs sig
   `config.json`, and other non-record files. Use `/^\d+\.json$/` or a specific regex.
 - **NEVER assume file writes are immediately visible in directory listings on Windows**. Always
   flush the write queue and poll for file appearance before asserting file counts.
+- **NEVER hardcode POSIX-style paths (`/tmp/...`, `/var/...`) in test assertions or
+  `mock.calls` expectations**. This silently passes on Linux/macOS and breaks on Windows CI
+  because the implementation uses `path.join` / `path.resolve` which produce platform-native
+  separators. Construct paths with `path.join(tmpdir(), "...")` (or `path.resolve(join(tmpdir(), "..."))`)
+  on both sides of the assertion.
 
 ## Architecture Principles
 

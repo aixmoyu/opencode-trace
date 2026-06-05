@@ -4,6 +4,7 @@ import { sanitizePath, parse, logger } from "@opencode-trace/core";
 import { ConfigManager } from "@opencode-trace/core/state";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { promises as fs } from "node:fs";
 import type { TraceRecord, TraceRequest, TraceResponse } from "./trace.js";
 
 export interface TracerConfig {
@@ -175,7 +176,13 @@ export class TracePlugin {
         }
       | undefined;
     if (meta.isStream && res.body) {
-      res = this.wrapStreamResponse(res, meta.requestSentAt);
+      res = await this.wrapStreamResponse(
+        res,
+        meta.requestSentAt,
+        meta.session,
+        meta.seq,
+        meta.traceDir,
+      );
       latencyMeta = (res as any).__latencyMeta;
     }
 
@@ -308,22 +315,57 @@ export class TracePlugin {
     };
   }
 
-  private wrapStreamResponse(res: Response, requestSentAt: number): Response {
+  private async wrapStreamResponse(
+    res: Response,
+    requestSentAt: number,
+    session: string,
+    seq: number,
+    traceDir: string,
+  ): Promise<Response> {
     const latencyMeta: {
       requestSentAt: number;
       firstTokenAt: number | null;
       lastTokenAt: number | null;
     } = { requestSentAt, firstTokenAt: null, lastTokenAt: null };
 
-    const transform = new TransformStream({
-      transform(chunk, controller) {
+    const sessionDir = join(traceDir, session);
+    const sseTmpPath = join(sessionDir, `${seq}.sse.tmp`);
+    const sseFinalPath = join(sessionDir, `${seq}.sse`);
+    await fs.mkdir(sessionDir, { recursive: true });
+    const fileHandle = await fs.open(sseTmpPath, "w");
+    let bytesWritten = 0;
+
+    const transform = new TransformStream<Uint8Array, Uint8Array>({
+      async transform(chunk, controller) {
         if (latencyMeta.firstTokenAt === null) {
           latencyMeta.firstTokenAt = performance.now();
         }
+        try {
+          await fileHandle.write(chunk);
+          bytesWritten += chunk.byteLength;
+        } catch (err) {
+          logger.error("Failed to write SSE chunk", {
+            seq,
+            error: String(err),
+          });
+        }
         controller.enqueue(chunk);
       },
-      flush() {
+      async flush() {
         latencyMeta.lastTokenAt = performance.now();
+        try {
+          await fileHandle.close();
+          if (bytesWritten > 0) {
+            await fs.rename(sseTmpPath, sseFinalPath);
+          } else {
+            await fs.unlink(sseTmpPath).catch(() => {});
+          }
+        } catch (err) {
+          logger.error("Failed to finalize SSE file", {
+            seq,
+            error: String(err),
+          });
+        }
       },
     });
 

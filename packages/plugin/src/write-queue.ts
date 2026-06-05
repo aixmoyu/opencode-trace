@@ -25,8 +25,10 @@ export class AsyncWriteQueue {
     record: TraceRecord;
     timelineEntry?: TimelineEntry;
     traceDir: string;
+    forceFallback?: boolean;
   }> = [];
   private writing: boolean = false;
+  private closed: boolean = false;
   private defaultTraceDir: string;
   private batchSize: number;
 
@@ -42,10 +44,31 @@ export class AsyncWriteQueue {
     timelineEntry?: TimelineEntry,
     traceDir?: string,
   ): void {
-    this.queue.push({ session, seq, record, timelineEntry, traceDir: traceDir ?? this.defaultTraceDir });
+    const targetDir = traceDir ?? this.defaultTraceDir;
+    if (this.closed) {
+      logger.warn("enqueue after close", { session, seq });
+      this.queue.push({
+        session,
+        seq,
+        record,
+        timelineEntry,
+        traceDir: targetDir,
+        forceFallback: true,
+      });
+      if (!this.writing) {
+        this.processQueue();
+      }
+      return;
+    }
+    this.queue.push({ session, seq, record, timelineEntry, traceDir: targetDir });
     if (!this.writing) {
       this.processQueue();
     }
+  }
+
+  async close(): Promise<void> {
+    await this.flush();
+    this.closed = true;
   }
 
   private async processQueue(): Promise<void> {
@@ -76,10 +99,21 @@ export class AsyncWriteQueue {
       record: TraceRecord;
       timelineEntry?: TimelineEntry;
       traceDir: string;
+      forceFallback?: boolean;
     }>,
   ): Promise<void> {
-    for (const { session, seq, record, timelineEntry, traceDir } of items) {
+    for (const { session, seq, record, timelineEntry, traceDir, forceFallback } of items) {
       try {
+        if (forceFallback) {
+          await this.writeFallback(
+            session,
+            seq,
+            record,
+            new Error("Queue is closed"),
+            traceDir,
+          );
+          continue;
+        }
         const sessionDir = join(traceDir, session);
         await fs.mkdir(sessionDir, { recursive: true });
 
@@ -109,7 +143,15 @@ export class AsyncWriteQueue {
       } catch (err: unknown) {
         const code = (err as NodeJS.ErrnoException)?.code;
         if ((code === "EACCES" || code === "EPERM") && i < retries - 1) {
-          await new Promise((r) => setTimeout(r, 50 * (i + 1)));
+          const delayMs = 50 * (i + 1);
+          logger.warn("safeRename retry", {
+            attempt: i + 1,
+            code,
+            src,
+            dest,
+            delayMs,
+          });
+          await new Promise((r) => setTimeout(r, delayMs));
           continue;
         }
         throw err;

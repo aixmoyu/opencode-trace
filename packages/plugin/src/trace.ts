@@ -115,11 +115,50 @@ const plugin: Plugin = async (input: PluginInput) => {
       if (input.tool === "task") {
         const metadata = output.metadata as Record<string, unknown> | undefined;
         if (metadata && typeof metadata.session_id === "string") {
-          instance
-            .getStateManager()!
-            .addSubSession(input.sessionID, metadata.session_id);
+          const sm = instance.getStateManager()!;
+          sm.addSubSession(input.sessionID, metadata.session_id);
+          sm.updateSessionMetadata(metadata.session_id, {
+            parentID: input.sessionID,
+          });
         }
       }
+    },
+
+    "chat.message": async (
+      input: { sessionID: string; agent?: string; messageID?: string; variant?: string },
+      _output: { message: import("@opencode-ai/sdk").UserMessage; parts: Part[] },
+    ) => {
+      if (!instance.getStateManager()) return;
+      logger.info("chat.message", {
+        sessionID: input.sessionID,
+        messageID: input.messageID,
+        agent: input.agent,
+        variant: input.variant,
+      });
+    },
+
+    "chat.params": async (
+      input: { sessionID: string; agent: string; model: unknown; provider: unknown; message: unknown },
+      _output: unknown,
+    ) => {
+      if (!instance.getStateManager()) return;
+      logger.info("chat.params", {
+        sessionID: input.sessionID,
+        agent: input.agent,
+        model: input.model,
+      });
+    },
+
+    "tool.execute.before": async (
+      input: { tool: string; sessionID: string; callID: string },
+      _output: { args: unknown },
+    ) => {
+      if (!instance.getStateManager()) return;
+      logger.info("tool.execute.before", {
+        sessionID: input.sessionID,
+        callID: input.callID,
+        tool: input.tool,
+      });
     },
 
     config: async (input: PluginConfig) => {

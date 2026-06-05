@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync, writeFileSync, promises as fs } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
@@ -61,11 +61,13 @@ export interface ViewerOptions {
   localDir?: string;
   open?: boolean;
   corsOrigin?: string | string[] | RegExp | boolean;
+  noListen?: boolean;
 }
 
 export interface ViewerInstance {
   url: string;
   close: () => Promise<void>;
+  app?: FastifyInstance;
 }
 
 interface SSEClient {
@@ -836,9 +838,13 @@ export async function createViewer(
     }
   });
 
-  await app.listen({ port, host: "0.0.0.0" });
-
-  const addr = `http://localhost:${port}`;
+  let addr: string;
+  if (options?.noListen) {
+    addr = "http://localhost:0";
+  } else {
+    await app.listen({ port, host: "0.0.0.0" });
+    addr = `http://localhost:${port}`;
+  }
 
   if (options?.open) {
     import("node:child_process").then(({ exec }) => {
@@ -854,6 +860,7 @@ export async function createViewer(
 
   return {
     url: addr,
+    app,
     close: async () => {
       clearInterval(sseKeepAlive);
       await watcher.close();
