@@ -47,6 +47,17 @@ export class ReadCache<TKey, TValue> {
     this.store.delete(key);
   }
 
+  invalidateMatching(predicate: (key: TKey) => boolean): number {
+    let removed = 0;
+    for (const key of this.store.keys()) {
+      if (predicate(key)) {
+        this.store.delete(key);
+        removed++;
+      }
+    }
+    return removed;
+  }
+
   invalidateAll(): void {
     this.store.clear();
   }

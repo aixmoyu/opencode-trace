@@ -62,6 +62,17 @@ describe("ReadCache", () => {
     expect(cache.size()).toBe(2);
   });
 
+  test("invalidateMatching() removes entries matching a predicate", () => {
+    cache.get("session-a/1", () => 1);
+    cache.get("session-a/2", () => 2);
+    cache.get("session-b/1", () => 3);
+
+    const removed = cache.invalidateMatching((k) => String(k).startsWith("session-a/"));
+
+    expect(removed).toBe(2);
+    expect(cache.size()).toBe(1);
+  });
+
   test("get() re-invokes the loader after the TTL elapses", () => {
     vi.useFakeTimers();
     try {

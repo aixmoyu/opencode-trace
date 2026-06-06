@@ -29,6 +29,10 @@ import {
   readTimelineIndex,
   getCachedParsed,
   deleteSessions,
+  invalidateReadCacheForSeq,
+  invalidateReadCacheForSession,
+  invalidateAllReadCache,
+  readCacheStats,
 } from "./index.js";
 import archiver from "archiver";
 import AdmZip from "adm-zip";
@@ -1531,5 +1535,84 @@ describe("importSessionZip - AdmZip 内容验证", () => {
     expect(names).toContain("manifest.json");
     expect(names).toContain("sessions/verify-session/metadata.json");
     expect(names).toContain("sessions/verify-session/1.json");
+  });
+});
+
+describe("read cache integration", () => {
+  beforeEach(() => {
+    invalidateAllReadCache();
+  });
+
+  it("getRecord returns the cached value on a second call without re-reading", () => {
+    const sessionDir = join(testDir, "cache-rec");
+    mkdirSync(sessionDir, { recursive: true });
+    const record = {
+      id: 1,
+      requestAt: "2024-01-01T00:00:00Z",
+      responseAt: "2024-01-01T00:00:01Z",
+      request: { method: "GET", url: "http://x", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: "cache-test",
+    };
+    writeFileSync(join(sessionDir, "1.json"), JSON.stringify(record));
+
+    const first = getRecord("cache-rec", 1, { traceDir: testDir });
+    expect(first?.purpose).toBe("cache-test");
+
+    writeFileSync(
+      join(sessionDir, "1.json"),
+      JSON.stringify({ ...record, purpose: "MUTATED" }),
+    );
+
+    const cached = getRecord("cache-rec", 1, { traceDir: testDir });
+    expect(cached?.purpose).toBe("cache-test");
+
+    invalidateReadCacheForSeq(testDir, "cache-rec", 1);
+
+    const fresh = getRecord("cache-rec", 1, { traceDir: testDir });
+    expect(fresh?.purpose).toBe("MUTATED");
+  });
+
+  it("invalidateReadCacheForSession clears every cached entry for a session", () => {
+    const sessionDir = join(testDir, "cache-sess");
+    mkdirSync(sessionDir, { recursive: true });
+    const record = {
+      id: 1,
+      requestAt: "2024-01-01T00:00:00Z",
+      responseAt: "2024-01-01T00:00:01Z",
+      request: { method: "GET", url: "http://x", headers: {}, body: null },
+      response: { status: 200, statusText: "OK", headers: {}, body: null },
+      error: null,
+      purpose: "sess-test",
+    };
+    writeFileSync(join(sessionDir, "1.json"), JSON.stringify(record));
+    writeFileSync(
+      join(sessionDir, "timeline.ndjson"),
+      JSON.stringify({ seq: 1, ...record }) + "\n",
+    );
+
+    getRecord("cache-sess", 1, { traceDir: testDir });
+    readTimelineIndex("cache-sess", { traceDir: testDir });
+    expect(readCacheStats().size).toBeGreaterThan(0);
+
+    invalidateReadCacheForSession(testDir, "cache-sess");
+    expect(readCacheStats().size).toBe(0);
+  });
+
+  it("invalidateAllReadCache clears every cached entry globally", () => {
+    const a = join(testDir, "all-a");
+    const b = join(testDir, "all-b");
+    mkdirSync(a, { recursive: true });
+    mkdirSync(b, { recursive: true });
+    writeFileSync(join(a, "1.json"), JSON.stringify({ id: 1, purpose: "a" }));
+    writeFileSync(join(b, "1.json"), JSON.stringify({ id: 1, purpose: "b" }));
+
+    getRecord("all-a", 1, { traceDir: testDir });
+    getRecord("all-b", 1, { traceDir: testDir });
+    expect(readCacheStats().size).toBeGreaterThanOrEqual(2);
+
+    invalidateAllReadCache();
+    expect(readCacheStats().size).toBe(0);
   });
 });

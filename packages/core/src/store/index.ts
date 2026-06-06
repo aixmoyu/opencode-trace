@@ -25,6 +25,10 @@ export {
   listSessionsFromBothDirsAsync,
   listSessionsTreeFromBothDirs,
   listSessionsTreeFromBothDirsAsync,
+  invalidateReadCacheForSeq,
+  invalidateReadCacheForSession,
+  invalidateAllReadCache,
+  readCacheStats,
 } from "./read.js";
 
 export {

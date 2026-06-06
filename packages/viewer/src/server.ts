@@ -14,6 +14,7 @@ import {
   transform,
   record,
   getTraceDir,
+  cache,
 } from "@opencode-trace/core";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -807,6 +808,12 @@ export async function createViewer(
     if (match) {
       const sessionId = match[1];
       const seq = parseInt(match[2], 10);
+      for (const dir of watchDirs) {
+        if (filePath.startsWith(dir)) {
+          store.invalidateReadCacheForSeq(dir, sessionId, seq);
+          break;
+        }
+      }
       broadcastSSE("record:added", { sessionId, seq });
     }
   });
@@ -816,6 +823,12 @@ export async function createViewer(
     if (match) {
       const sessionId = match[1];
       const seq = parseInt(match[2], 10);
+      for (const dir of watchDirs) {
+        if (filePath.startsWith(dir)) {
+          store.invalidateReadCacheForSeq(dir, sessionId, seq);
+          break;
+        }
+      }
       broadcastSSE("record:updated", { sessionId, seq });
     }
   });
@@ -849,6 +862,12 @@ export async function createViewer(
         // ndjinx cleanup is best-effort
       }
 
+      for (const dir of watchDirs) {
+        if (filePath.startsWith(dir)) {
+          store.invalidateReadCacheForSeq(dir, sessionId, seq);
+          break;
+        }
+      }
       broadcastSSE("record:deleted", { sessionId, seq });
     }
   });
@@ -864,6 +883,12 @@ export async function createViewer(
         const hasRecord = files.some((f) => /^\d+\.json$/.test(f));
         const hasMeta = files.some((f) => f === "metadata.json");
         if (hasRecord || hasMeta) {
+          for (const dir of watchDirs) {
+            if (dirPath.startsWith(dir)) {
+              store.invalidateReadCacheForSession(dir, sessionId);
+              break;
+            }
+          }
           broadcastSSE("session:created", { sessionId });
         }
       } catch {
@@ -876,6 +901,12 @@ export async function createViewer(
     const match = dirPath.match(/\/([^/]+)$/);
     if (match) {
       const sessionId = match[1];
+      for (const dir of watchDirs) {
+        if (dirPath.startsWith(dir)) {
+          store.invalidateReadCacheForSession(dir, sessionId);
+          break;
+        }
+      }
       broadcastSSE("session:deleted", { sessionId });
     }
   });

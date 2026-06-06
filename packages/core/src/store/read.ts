@@ -13,6 +13,7 @@ import { TraceRecordSchema } from "../schemas/types.js";
 import { SessionMetadataFileSchema } from "../schemas/store-types.js";
 import { PARSED_CACHE_VERSION } from "../parse/index.js";
 import { logger } from "../logger.js";
+import { ReadCache } from "../cache/read-cache.js";
 
 export interface StoreOptions {
   traceDir?: string;
@@ -25,6 +26,49 @@ export interface BothDirsOptions {
 
 export function resolveDir(options?: StoreOptions): string {
   return options?.traceDir ?? getDefaultTraceDir();
+}
+
+const readCache = new ReadCache<string, unknown>({ maxSize: 2000, ttlMs: 5000 });
+
+function recordCacheKey(traceDir: string, sessionId: string, seq: number): string {
+  return `r:${traceDir}:${sessionId}:${seq}`;
+}
+function parsedCacheKey(traceDir: string, sessionId: string, seq: number): string {
+  return `p:${traceDir}:${sessionId}:${seq}`;
+}
+function sseCacheKey(traceDir: string, sessionId: string, seq: number): string {
+  return `s:${traceDir}:${sessionId}:${seq}`;
+}
+function timelineCacheKey(traceDir: string, sessionId: string): string {
+  return `t:${traceDir}:${sessionId}`;
+}
+
+function sessionPrefix(traceDir: string, sessionId: string): string {
+  return `:${traceDir}:${sessionId}`;
+}
+
+export function invalidateReadCacheForSeq(
+  traceDir: string,
+  sessionId: string,
+  seq: number,
+): void {
+  readCache.invalidate(recordCacheKey(traceDir, sessionId, seq));
+  readCache.invalidate(parsedCacheKey(traceDir, sessionId, seq));
+  readCache.invalidate(sseCacheKey(traceDir, sessionId, seq));
+  readCache.invalidate(timelineCacheKey(traceDir, sessionId));
+}
+
+export function invalidateReadCacheForSession(traceDir: string, sessionId: string): void {
+  const prefix = sessionPrefix(traceDir, sessionId);
+  readCache.invalidateMatching((k) => k.includes(prefix));
+}
+
+export function invalidateAllReadCache(): void {
+  readCache.invalidateAll();
+}
+
+export function readCacheStats(): { size: number } {
+  return { size: readCache.size() };
 }
 
 export interface SessionMeta {
@@ -465,7 +509,18 @@ export function getRecord(
   recordId: number,
   options?: StoreOptions,
 ): TraceRecord | null {
-  const filePath = join(resolveDir(options), sessionId, `${recordId}.json`);
+  const traceDir = resolveDir(options);
+  return readCache.get(recordCacheKey(traceDir, sessionId, recordId), () =>
+    readRecordUncached(sessionId, recordId, traceDir),
+  ) as TraceRecord | null;
+}
+
+function readRecordUncached(
+  sessionId: string,
+  recordId: number,
+  traceDir: string,
+): TraceRecord | null {
+  const filePath = join(traceDir, sessionId, `${recordId}.json`);
   try {
     const raw = readFileSync(filePath, "utf-8");
     const parsed = TraceRecordSchema.safeParse(JSON.parse(raw));
@@ -486,7 +541,18 @@ export function getSSEStream(
   recordId: number,
   options?: StoreOptions,
 ): string | null {
-  const filePath = join(resolveDir(options), sessionId, `${recordId}.sse`);
+  const traceDir = resolveDir(options);
+  return readCache.get(sseCacheKey(traceDir, sessionId, recordId), () =>
+    readSSEStreamUncached(sessionId, recordId, traceDir),
+  ) as string | null;
+}
+
+function readSSEStreamUncached(
+  sessionId: string,
+  recordId: number,
+  traceDir: string,
+): string | null {
+  const filePath = join(traceDir, sessionId, `${recordId}.sse`);
   try {
     return readFileSync(filePath, "utf-8");
   } catch (err) {
@@ -508,7 +574,17 @@ export function readTimelineIndex(
   sessionId: string,
   options?: StoreOptions,
 ): TimelineEntry[] {
-  const sessionDir = join(resolveDir(options), sessionId);
+  const traceDir = resolveDir(options);
+  return readCache.get(timelineCacheKey(traceDir, sessionId), () =>
+    readTimelineIndexUncached(sessionId, traceDir),
+  ) as TimelineEntry[];
+}
+
+function readTimelineIndexUncached(
+  sessionId: string,
+  traceDir: string,
+): TimelineEntry[] {
+  const sessionDir = join(traceDir, sessionId);
   const indexPath = join(sessionDir, "timeline.ndjson");
   if (!existsSync(indexPath)) return [];
 
@@ -540,7 +616,18 @@ export function getCachedParsed(
   seq: number,
   options?: StoreOptions,
 ): Record<string, unknown> | null {
-  const sessionDir = join(resolveDir(options), sessionId);
+  const traceDir = resolveDir(options);
+  return readCache.get(parsedCacheKey(traceDir, sessionId, seq), () =>
+    getCachedParsedUncached(sessionId, seq, traceDir),
+  ) as Record<string, unknown> | null;
+}
+
+function getCachedParsedUncached(
+  sessionId: string,
+  seq: number,
+  traceDir: string,
+): Record<string, unknown> | null {
+  const sessionDir = join(traceDir, sessionId);
   const cachePath = join(sessionDir, `${seq}.parsed`);
   if (!existsSync(cachePath)) return null;
 
