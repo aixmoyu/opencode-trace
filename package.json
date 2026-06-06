@@ -17,9 +17,15 @@
     "viewer": "node packages/viewer/dist/cli.js",
     "dev": "concurrently \"npm run dev:watch\" \"npm run dev:serve\"",
     "dev:watch": "tsc -b --watch",
-    "dev:serve": "nodemon --watch packages/viewer/dist --exec 'node packages/viewer/dist/cli.js --no-open'"
+    "dev:serve": "nodemon --watch packages/viewer/dist --exec 'node packages/viewer/dist/cli.js --no-open'",
+    "changeset": "changeset",
+    "changeset:status": "changeset status",
+    "version": "changeset version",
+    "publish": "changeset publish",
+    "release": "npm run build && npm run publish"
   },
   "devDependencies": {
+    "@changesets/cli": "2.31.0",
     "concurrently": "^9.2.1",
     "eslint": "^10.4.1",
     "nodemon": "^3.1.10",
