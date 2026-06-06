@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import { createViewer } from "./server.js";
+import { VERSION } from "./version.js";
 
 const USAGE = [
   "Usage: opencode-trace-viewer [options]",
   "",
   "Options:",
+  "  -v, --version          Print version and exit",
   "  -p, --port <num>       Specify port (default 3210)",
   "  -d, --trace-dir <path> Read trace data from custom path instead of ~/.opencode-trace",
   "  -n, --no-open          Don't open browser automatically",
@@ -12,6 +14,11 @@ const USAGE = [
 ].join("\n");
 
 const rawArgs = process.argv.slice(2);
+
+if (rawArgs.includes("-v") || rawArgs.includes("--version")) {
+  console.log(`@opencode-trace/viewer ${VERSION}`);
+  process.exit(0);
+}
 
 let traceDir: string | undefined;
 let openBrowser = true;

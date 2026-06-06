@@ -6,6 +6,7 @@ import { cmdList } from "./handlers/list.js";
 import { cmdShow } from "./handlers/show.js";
 import { cmdExport } from "./handlers/export.js";
 import { cmdViewer } from "./handlers/viewer.js";
+import { VERSION } from "./version.js";
 
 function help(): void {
   console.log(`opencode-trace - CLI for managing opencode trace data
@@ -69,7 +70,7 @@ async function main() {
   }
 
   if (command === "--version" || command === "-v") {
-    console.error("opencode-trace version 0.0.1");
+    console.log(`@opencode-trace/cli ${VERSION}`);
     process.exit(0);
   }
 

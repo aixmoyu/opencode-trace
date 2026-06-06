@@ -20,7 +20,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "prebuild": "node ../../scripts/sync-version.mjs",
+    "build": "tsc -b",
     "test": "vitest run",
     "debug:plugin:create": "node ../../scripts/test-plugin.mjs create",
     "debug:plugin:remove": "node ../../scripts/test-plugin.mjs remove",
