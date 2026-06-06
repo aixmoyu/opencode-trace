@@ -30,12 +30,12 @@ describe("ConfigManager - 初始化", () => {
     expect(existsSync(join(testDir, "config.json"))).toBe(true);
   });
 
-  test("初始化后 global_trace_enabled 默认为 false", async () => {
+  test("初始化后 global_trace_enabled 默认为 true", async () => {
     const manager = new ConfigManager(testDir);
     await manager.init();
 
     const globalEnabled = manager.getGlobalState("global_trace_enabled");
-    expect(globalEnabled).toBe("false");
+    expect(globalEnabled).toBe("true");
   });
 
   test("初始化后 plugin_enabled 默认为 true", async () => {
@@ -347,12 +347,12 @@ describe("ConfigManager - Session 元数据管理", () => {
 });
 
 describe("ConfigManager - Trace Enable/Disable", () => {
-  test("初始化后 global_trace_enabled 默认为 false", async () => {
+  test("初始化后 global_trace_enabled 默认为 true", async () => {
     const manager = new ConfigManager(testDir);
     await manager.init();
 
     const globalEnabled = manager.getGlobalState("global_trace_enabled");
-    expect(globalEnabled).toBe("false");
+    expect(globalEnabled).toBe("true");
   });
 
   test("setGlobalState 可以关闭 global_trace_enabled", async () => {
@@ -599,7 +599,7 @@ describe("ConfigManager - readConfig 错误恢复", () => {
     );
     expect(call).toBeDefined();
 
-    expect(manager.getGlobalState("global_trace_enabled")).toBe("false");
+    expect(manager.getGlobalState("global_trace_enabled")).toBe("true");
     expect(manager.getGlobalState("plugin_enabled")).toBe("true");
 
     errorSpy.mockRestore();
@@ -613,7 +613,7 @@ describe("ConfigManager - readConfig 错误恢复", () => {
     const parsed = JSON.parse(
       readFileSync(join(testDir, "config.json"), "utf-8"),
     );
-    expect(parsed.global_trace_enabled).toBe(false);
+    expect(parsed.global_trace_enabled).toBe(true);
     expect(parsed.storage_preference).toBe("global");
     expect(parsed.plugin_enabled).toBe(true);
     expect(parsed.current_session).toBeNull();
@@ -654,7 +654,7 @@ describe("ConfigManager - readConfig 错误恢复", () => {
     const manager = new ConfigManager(testDir);
     await manager.init();
 
-    expect(manager.getGlobalState("global_trace_enabled")).toBe("false");
+    expect(manager.getGlobalState("global_trace_enabled")).toBe("true");
     expect(manager.getStoragePreference()).toBe("global");
     expect(manager.getGlobalState("plugin_enabled")).toBe("true");
     expect(manager.getGlobalState("current_session")).toBeNull();

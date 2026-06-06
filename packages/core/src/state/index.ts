@@ -54,7 +54,7 @@ interface ConfigFile {
 }
 
 const DEFAULT_CONFIG: ConfigFile = {
-  global_trace_enabled: false,
+  global_trace_enabled: true,
   storage_preference: "global",
   plugin_enabled: true,
   current_session: null,

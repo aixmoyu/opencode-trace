@@ -549,7 +549,7 @@ describe("TracePlugin - config corruption recovery", () => {
       await p.initStateManager();
 
       const gcm = p.getGlobalConfigManager()!;
-      expect(gcm.getGlobalState("global_trace_enabled")).toBe("false");
+      expect(gcm.getGlobalState("global_trace_enabled")).toBe("true");
       expect(gcm.getGlobalState("plugin_enabled")).toBe("true");
       expect(gcm.getStoragePreference()).toBe("global");
       expect(errorSpy).toHaveBeenCalled();

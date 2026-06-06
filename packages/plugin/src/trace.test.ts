@@ -130,6 +130,46 @@ describe("Plugin - event hook 处理 session.created", () => {
     const meta = JSON.parse(readFileSync(metaPath, "utf-8"));
     expect(meta.folderPath).toBe(testDir);
   });
+
+  test("event hook 在 shouldRecord 为 false 时不创建 session 文件夹和 metadata", async () => {
+    const hooks = await entrypoint.server({
+      client: {} as any,
+      project: {} as any,
+      directory: testDir,
+      worktree: testDir,
+      experimental_workspace: { register: vi.fn() },
+      serverUrl: new URL("http://localhost"),
+      $: {} as any,
+    });
+
+    const sm = _getTestPlugin()!.getGlobalConfigManager()!;
+    sm.setGlobalState("global_trace_enabled", "false");
+
+    const sessionId = "disabled-session-456";
+
+    await hooks.event!({
+      event: {
+        type: "session.created",
+        properties: {
+          info: {
+            id: sessionId,
+            projectID: "test-project",
+            directory: testDir,
+            title: "Disabled Session",
+            version: "1.0",
+            time: { created: Date.now(), updated: Date.now() },
+          },
+        },
+      } as any,
+    });
+
+    const traceDir = join(testDir, ".opencode-trace");
+    const sessionDir = join(traceDir, sessionId);
+    const metaPath = join(sessionDir, "metadata.json");
+
+    expect(existsSync(sessionDir)).toBe(false);
+    expect(existsSync(metaPath)).toBe(false);
+  });
 });
 
 describe("Stream request detection", () => {

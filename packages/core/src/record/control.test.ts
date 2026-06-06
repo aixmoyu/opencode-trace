@@ -81,10 +81,10 @@ describe("record/control - StateManager集成", () => {
 });
 
 describe("record/control - Trace Enable/Disable", () => {
-  test("getGlobalTraceEnabled 默认返回 false", async () => {
+  test("getGlobalTraceEnabled 默认返回 true", async () => {
     await startRecording(undefined, testDir);
 
-    expect(getGlobalTraceEnabled(testDir)).toBe(false);
+    expect(getGlobalTraceEnabled(testDir)).toBe(true);
   });
 
   test("setGlobalTraceEnabled 可以设置全局开关", async () => {

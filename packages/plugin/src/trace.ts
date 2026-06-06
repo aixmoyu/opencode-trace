@@ -93,6 +93,8 @@ const plugin: Plugin = async (input: PluginInput) => {
       ) {
         const session = (event.properties as { info: Session }).info;
 
+        if (!instance.shouldRecord(session.id)) return;
+
         const existing = instance.getStateManager()!.getSession(session.id);
         if (!existing) {
           instance.getStateManager()!.startSession(session.id);
