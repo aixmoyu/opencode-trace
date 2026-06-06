@@ -1,4 +1,5 @@
 import { AsyncWriteQueue, TimelineEntry } from "./write-queue.js";
+import { FallbackReconciler } from "./fallback-reconciler.js";
 import { redactHeaders } from "./redact.js";
 import { sanitizePath, parse, logger } from "@opencode-trace/core";
 import { ConfigManager, initConfigManager } from "@opencode-trace/core/state";
@@ -29,6 +30,8 @@ export class TracePlugin {
   private origFetch: typeof fetch;
   private ids: Map<string, number> = new Map();
   private writeQueue: AsyncWriteQueue;
+  private reconciler: FallbackReconciler;
+  private reconcilerStarted: boolean = false;
   private interceptorInstalled: boolean = false;
   private globalDir: string;
   private localDir: string;
@@ -43,11 +46,16 @@ export class TracePlugin {
     this.localDir = config.localDir;
     this.origFetch = globalThis.fetch;
     this.writeQueue = new AsyncWriteQueue(this.globalDir);
+    this.reconciler = new FallbackReconciler(this.globalDir);
   }
 
   async initStateManager(): Promise<void> {
     this.globalConfigManager = await initConfigManager(this.globalDir);
     this.localConfigManager = await initConfigManager(this.localDir);
+    if (!this.reconcilerStarted) {
+      await this.reconciler.start();
+      this.reconcilerStarted = true;
+    }
   }
 
   getStateManager(): ConfigManager | null {
@@ -566,6 +574,16 @@ export class TracePlugin {
 
   async flush(): Promise<void> {
     await this.writeQueue.flush();
+    await this.reconciler.reconcile();
+  }
+
+  async stop(): Promise<void> {
+    await this.writeQueue.close();
+    if (this.reconcilerStarted) {
+      await this.reconciler.stop();
+      this.reconcilerStarted = false;
+    }
+    this.uninstallInterceptor();
   }
 
   wrap(fetch: typeof globalThis.fetch): typeof fetch {
