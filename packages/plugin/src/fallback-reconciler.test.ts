@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "vitest";
+import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { FallbackReconciler } from "./fallback-reconciler.js";
 import {
   mkdtempSync,
@@ -108,13 +108,15 @@ describe("FallbackReconciler", () => {
   test("reconcile leaves file in fallback when destination write fails", async () => {
     const fallbackPath = await writeFallbackFile(tempDir, "stuck-session", 1);
 
-    const sessionDir = join(tempDir, "stuck-session");
-    await fs.mkdir(sessionDir, { recursive: true });
-    await fs.chmod(sessionDir, 0o555);
+    const writeFileSpy = vi
+      .spyOn(fs, "writeFile")
+      .mockImplementationOnce(async () => {
+        throw new Error("write failed");
+      });
 
     const result = await reconciler.reconcile();
 
-    await fs.chmod(sessionDir, 0o755);
+    writeFileSpy.mockRestore();
 
     expect(result.failed).toBe(1);
     expect(existsSync(fallbackPath)).toBe(true);
