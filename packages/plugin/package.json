@@ -1,6 +1,6 @@
 {
   "name": "@opencode-trace/plugin",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "type": "module",
   "description": "OpenCode plugin for trace recording",
   "main": "./dist/trace.js",
@@ -30,7 +30,7 @@
   "dependencies": {
     "@opencode-ai/plugin": "^1.14.22",
     "@opencode-ai/sdk": "^1.14.41",
-    "@opencode-trace/core": "0.0.6"
+    "@opencode-trace/core": "0.0.7"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.8",
