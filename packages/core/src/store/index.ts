@@ -11,8 +11,10 @@ export type {
 export {
   safeReaddir,
   listSessions,
+  listSessionsAsync,
   listSessionsTree,
   getSessionRecords,
+  getSessionRecordsAsync,
   getRecord,
   getSSEStream,
   getTraceDir,
@@ -20,7 +22,9 @@ export {
   getCachedParsed,
   readSessionMetadata,
   listSessionsFromBothDirs,
+  listSessionsFromBothDirsAsync,
   listSessionsTreeFromBothDirs,
+  listSessionsTreeFromBothDirsAsync,
 } from "./read.js";
 
 export {

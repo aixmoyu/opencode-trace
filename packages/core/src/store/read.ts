@@ -4,6 +4,7 @@ import {
   statSync,
   existsSync,
 } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getTraceDir as getDefaultTraceDir } from "../paths.js";
 import type { TraceRecord } from "../types.js";
@@ -236,6 +237,132 @@ export function listSessions(options?: StoreOptions): SessionMeta[] {
   );
 }
 
+export async function listSessionsAsync(options?: StoreOptions): Promise<SessionMeta[]> {
+  const base = resolveDir(options);
+  const manager = getManagerSync(base);
+
+  if (manager) {
+    return manager.listSessions().map(sessionStateToMeta);
+  }
+
+  let entries: Array<{ name: string; isDirectory: () => boolean }>;
+  try {
+    entries = await readdir(base, { withFileTypes: true });
+  } catch (err) {
+    const errCode = (err as NodeJS.ErrnoException).code;
+    if (errCode === "ENOENT") {
+      logger.warn("Trace directory does not exist", { dir: base });
+    } else {
+      logger.error("Failed to read directory", { dir: base, error: String(err) });
+    }
+    return [];
+  }
+
+  const sessions: SessionMeta[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const full = join(base, entry.name);
+    try {
+      let title: string | undefined;
+      let parentID: string | undefined;
+      let folderPath: string | undefined;
+      try {
+        const metaPath = join(full, "metadata.json");
+        const metaRaw = await readFile(metaPath, "utf-8");
+        const meta = JSON.parse(metaRaw) as {
+          title?: string;
+          parentID?: string;
+          folderPath?: string;
+        };
+        title = meta.title;
+        parentID = meta.parentID;
+        folderPath = meta.folderPath;
+      } catch {
+        // no metadata, that's ok
+      }
+
+      let createdAt: string | null = null;
+      let updatedAt: string | null = null;
+      let requestCount = 0;
+      let usedNdjson = false;
+
+      const ndjsonPath = join(full, "timeline.ndjson");
+      try {
+        const raw = await readFile(ndjsonPath, "utf-8");
+        const lines = raw.split("\n").filter((l) => l.trim());
+        if (lines.length > 0) {
+          requestCount = lines.length;
+          usedNdjson = true;
+          let lastResponseAt: string | null = null;
+          for (const line of lines) {
+            try {
+              const entry = JSON.parse(line) as { requestAt?: string; responseAt?: string | null };
+              if (entry.requestAt && (!createdAt || entry.requestAt < createdAt)) {
+                createdAt = entry.requestAt;
+              }
+              if (entry.responseAt && (!lastResponseAt || entry.responseAt > lastResponseAt)) {
+                lastResponseAt = entry.responseAt;
+              }
+            } catch {
+              // skip malformed line
+            }
+          }
+          updatedAt = lastResponseAt;
+        }
+      } catch {
+        // ndjson unreadable, fall through to JSON file scan
+      }
+
+      if (!usedNdjson) {
+        let files: string[];
+        try {
+          const dirEntries = await readdir(full);
+          files = dirEntries.filter((f) => /^\d+\.json$/.test(f));
+        } catch {
+          files = [];
+        }
+        if (files.length === 0 && !title) continue;
+        requestCount = files.length;
+
+        for (const f of files) {
+          try {
+            const raw = await readFile(join(full, f), "utf-8");
+            const rec: TraceRecord = JSON.parse(raw);
+            if (!createdAt || rec.requestAt < createdAt) createdAt = rec.requestAt;
+            if (!updatedAt || rec.responseAt > updatedAt) updatedAt = rec.responseAt;
+          } catch (err) {
+            logger.error("Failed to read record file for session listing", {
+              sessionDir: full,
+              file: f,
+              error: String(err),
+            });
+          }
+        }
+      }
+
+      sessions.push({
+        id: entry.name,
+        requestCount,
+        createdAt,
+        updatedAt,
+        title,
+        parentID,
+        folderPath,
+      });
+    } catch (err) {
+      logger.error("Failed to process session entry for listing", {
+        entry: entry.name,
+        traceDir: base,
+        error: String(err),
+      });
+    }
+  }
+
+  return sessions.sort((a, b) =>
+    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
+  );
+}
+
 export function listSessionsTree(options?: StoreOptions): SessionTreeNode[] {
   const sessions = listSessions(options);
   const tree: SessionTreeNode[] = [];
@@ -274,6 +401,50 @@ export function getSessionRecords(
   for (const f of files) {
     try {
       const raw = readFileSync(join(sessionDir, f), "utf-8");
+      const parsed = TraceRecordSchema.safeParse(JSON.parse(raw));
+      if (parsed.success) {
+        records.push(parsed.data);
+      }
+    } catch (err) {
+      logger.error("Failed to read session record", {
+        sessionId,
+        file: f,
+        error: String(err),
+      });
+    }
+  }
+  return records;
+}
+
+export async function getSessionRecordsAsync(
+  sessionId: string,
+  options?: StoreOptions,
+): Promise<TraceRecord[]> {
+  const sessionDir = join(resolveDir(options), sessionId);
+  try {
+    await readdir(sessionDir);
+  } catch {
+    return [];
+  }
+
+  let files: string[];
+  try {
+    const entries = await readdir(sessionDir);
+    files = entries
+      .filter((f) => /^\d+\.json$/.test(f))
+      .sort((a, b) => {
+        const na = parseInt(a, 10);
+        const nb = parseInt(b, 10);
+        return na - nb;
+      });
+  } catch {
+    return [];
+  }
+
+  const records: TraceRecord[] = [];
+  for (const f of files) {
+    try {
+      const raw = await readFile(join(sessionDir, f), "utf-8");
       const parsed = TraceRecordSchema.safeParse(JSON.parse(raw));
       if (parsed.success) {
         records.push(parsed.data);
@@ -468,6 +639,62 @@ export function listSessionsTreeFromBothDirs(
   options: BothDirsOptions,
 ): SessionTreeNodeWithScope[] {
   const sessions = listSessionsFromBothDirs(options);
+  const tree: SessionTreeNodeWithScope[] = [];
+
+  for (const session of sessions) {
+    if (!session.parentID) {
+      const children = sessions.filter((s) => s.parentID === session.id);
+      const node: SessionTreeNodeWithScope = {
+        ...session,
+        children,
+      };
+      tree.push(node);
+    }
+  }
+
+  return tree.sort((a, b) =>
+    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
+  );
+}
+
+export async function listSessionsFromBothDirsAsync(
+  options: BothDirsOptions,
+): Promise<SessionMetaWithScope[]> {
+  const { globalDir, localDir } = options;
+
+  const globalSessions = (await listSessionsAsync({ traceDir: globalDir })).map((s) => ({
+    ...s,
+    scope: "global" as const,
+  }));
+
+  if (!localDir) {
+    return globalSessions;
+  }
+
+  const localSessions = (await listSessionsAsync({ traceDir: localDir })).map((s) => ({
+    ...s,
+    scope: "local" as const,
+  }));
+
+  const sessionMap = new Map<string, SessionMetaWithScope>();
+
+  for (const session of globalSessions) {
+    sessionMap.set(session.id, session);
+  }
+
+  for (const session of localSessions) {
+    sessionMap.set(session.id, session);
+  }
+
+  return Array.from(sessionMap.values()).sort((a, b) =>
+    (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
+  );
+}
+
+export async function listSessionsTreeFromBothDirsAsync(
+  options: BothDirsOptions,
+): Promise<SessionTreeNodeWithScope[]> {
+  const sessions = await listSessionsFromBothDirsAsync(options);
   const tree: SessionTreeNodeWithScope[] = [];
 
   for (const session of sessions) {

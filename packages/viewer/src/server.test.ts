@@ -17,8 +17,11 @@ vi.mock("@opencode-trace/core", async (importOriginal) => {
     ...original,
     store: {
       listSessionsFromBothDirs: vi.fn().mockReturnValue([]),
+      listSessionsFromBothDirsAsync: vi.fn().mockResolvedValue([]),
       listSessionsTreeFromBothDirs: vi.fn().mockReturnValue([]),
+      listSessionsTreeFromBothDirsAsync: vi.fn().mockResolvedValue([]),
       getSessionRecords: vi.fn().mockReturnValue([]),
+      getSessionRecordsAsync: vi.fn().mockResolvedValue([]),
       getRecord: vi.fn().mockReturnValue(null),
       getSSEStream: vi.fn().mockReturnValue(null),
       readTimelineIndex: vi.fn().mockReturnValue([]),
@@ -189,8 +192,11 @@ describe("createViewer (real integration)", () => {
 
   function reapplyMocks(): void {
     vi.mocked(store.listSessionsFromBothDirs).mockReturnValue([]);
+    vi.mocked(store.listSessionsFromBothDirsAsync).mockResolvedValue([]);
     vi.mocked(store.listSessionsTreeFromBothDirs).mockReturnValue([]);
+    vi.mocked(store.listSessionsTreeFromBothDirsAsync).mockResolvedValue([]);
     vi.mocked(store.getSessionRecords).mockReturnValue([]);
+    vi.mocked(store.getSessionRecordsAsync).mockResolvedValue([]);
     vi.mocked(store.getRecord).mockReturnValue(null);
     vi.mocked(store.getSSEStream).mockReturnValue(null);
     vi.mocked(store.readTimelineIndex).mockReturnValue([]);
@@ -301,7 +307,7 @@ describe("createViewer (real integration)", () => {
           scope: "global" as const,
         },
       ];
-      vi.mocked(store.listSessionsFromBothDirs).mockReturnValue(mockSessions);
+      vi.mocked(store.listSessionsFromBothDirsAsync).mockResolvedValue(mockSessions);
       instance = await createViewer({
         port: 0,
         noListen: true,
@@ -328,7 +334,7 @@ describe("createViewer (real integration)", () => {
           children: [],
         },
       ];
-      vi.mocked(store.listSessionsTreeFromBothDirs).mockReturnValue(mockTree);
+      vi.mocked(store.listSessionsTreeFromBothDirsAsync).mockResolvedValue(mockTree);
       instance = await createViewer({
         port: 0,
         noListen: true,
@@ -855,8 +861,8 @@ describe("createViewer (real integration)", () => {
       vi.mocked(store.readSessionMetadata).mockReturnValue({
         sessionId: "abc",
       } as never);
-      vi.mocked(store.listSessionsFromBothDirs).mockReturnValue([mockSession]);
-      vi.mocked(store.getSessionRecords).mockReturnValue([mockRecord]);
+      vi.mocked(store.listSessionsFromBothDirsAsync).mockResolvedValue([mockSession]);
+      vi.mocked(store.getSessionRecordsAsync).mockResolvedValue([mockRecord]);
 
       instance = await createViewer({
         port: 0,
@@ -875,7 +881,7 @@ describe("createViewer (real integration)", () => {
     });
 
     it("returns placeholder session meta when session meta missing", async () => {
-      vi.mocked(store.listSessionsFromBothDirs).mockReturnValue([]);
+      vi.mocked(store.listSessionsFromBothDirsAsync).mockResolvedValue([]);
 
       instance = await createViewer({
         port: 0,
@@ -1482,7 +1488,7 @@ describe("createViewer (real integration)", () => {
       const globalDir = join(testDir, "global-trace");
 
       vi.mocked(store.readSessionMetadata).mockReturnValue(null);
-      vi.mocked(store.getSessionRecords).mockReturnValue([]);
+      vi.mocked(store.getSessionRecordsAsync).mockResolvedValue([]);
 
       instance = await createViewer({
         port: 0,
@@ -1510,7 +1516,7 @@ describe("createViewer (real integration)", () => {
           return null;
         }) as never);
       vi.mocked(store.readTimelineIndex).mockReturnValue([]);
-      vi.mocked(store.getSessionRecords).mockReturnValue([]);
+      vi.mocked(store.getSessionRecordsAsync).mockResolvedValue([]);
 
       instance = await createViewer({
         port: 0,
@@ -1525,7 +1531,7 @@ describe("createViewer (real integration)", () => {
       });
       expect(response.statusCode).toBe(200);
 
-      const calls = vi.mocked(store.getSessionRecords).mock.calls;
+      const calls = vi.mocked(store.getSessionRecordsAsync).mock.calls;
       const usedDir = calls.length > 0 ? calls[calls.length - 1][1]?.traceDir : null;
       expect(usedDir).toBe(localDir);
     });
@@ -1535,12 +1541,12 @@ describe("createViewer (real integration)", () => {
       const globalDir = join(testDir, "global-trace");
 
       vi.mocked(store.readSessionMetadata).mockReturnValue(null);
-      vi.mocked(store.getSessionRecords)
+      vi.mocked(store.getSessionRecordsAsync)
         .mockImplementation(((sessionId: string, opts?: any) => {
           if (opts?.traceDir === localDir && sessionId === "local-records-only") {
-            return [mockRecord];
+            return Promise.resolve([mockRecord]);
           }
-          return [];
+          return Promise.resolve([]);
         }) as never);
 
       instance = await createViewer({
