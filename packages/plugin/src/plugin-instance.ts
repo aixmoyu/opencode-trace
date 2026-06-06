@@ -160,7 +160,7 @@ export class TracePlugin {
         null,
         error,
       );
-      this.writeQueue.enqueue(meta.session, meta.seq, record, timelineEntry, meta.traceDir);
+      await this.writeQueue.enqueue(meta.session, meta.seq, record, timelineEntry, meta.traceDir);
       this.writeParsedCacheAsync(meta.session, meta.seq, record, meta.traceDir);
       throw err;
     }
@@ -425,7 +425,7 @@ export class TracePlugin {
         traceRes,
         null,
       );
-      this.writeQueue.enqueue(session, seq, record, timelineEntry, dir);
+      await this.writeQueue.enqueue(session, seq, record, timelineEntry, dir);
       this.writeParsedCacheAsync(session, seq, record, dir);
     } catch (err) {
       const error =
@@ -457,7 +457,7 @@ export class TracePlugin {
         null,
         error,
       );
-      this.writeQueue.enqueue(session, seq, record, timelineEntry, dir);
+      await this.writeQueue.enqueue(session, seq, record, timelineEntry, dir);
       this.writeParsedCacheAsync(session, seq, record, dir);
     }
   }
