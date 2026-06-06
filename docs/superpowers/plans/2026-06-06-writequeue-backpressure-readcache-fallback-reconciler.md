@@ -1046,7 +1046,8 @@ Expected: `Cannot find module './cache.js'`. **This is the red.**
 Create `packages/core/src/store/cache.ts`:
 
 ```typescript
-import type { SessionMetadata, TimelineEntry } from "@opencode-trace/core";
+import type { SessionMetadata } from "../state/index.js";
+import type { TimelineEntry } from "./read.js";
 
 export interface ReadCacheOptions {
   ttlMs?: number;
@@ -1160,7 +1161,14 @@ export function getReadCache(): ReadCache {
 }
 ```
 
-**Note on `SessionMetadata` / `TimelineEntry` types:** Verify these are exported from `@opencode-trace/core` by reading the package's index. If not, import the actual concrete types from the file that defines them, or use `any` (with a TODO comment) and tighten in a follow-up.
+**Note on type imports:** `SessionMetadata` lives in `packages/core/src/state/index.ts:29` and `TimelineEntry` lives in `packages/core/src/store/read.ts:50`. Since `cache.ts` is in the same package, use relative imports:
+
+```typescript
+import type { TimelineEntry } from "./read.js";
+import type { SessionMetadata } from "../state/index.js";
+```
+
+Verified at plan-time by reading the actual source files.
 
 ### Step 4.4: Run tests, expect green
 
