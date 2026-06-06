@@ -174,12 +174,6 @@ function extractUsage(body: Record<string, unknown>): Conversation["usage"] {
 export const openaiChatParser: Parser = {
   provider: "openai-chat",
 
-  match(url: string, body: unknown): boolean {
-    if (!url.includes("/chat/completions")) return false;
-    if (isRecord(body) && Array.isArray(body.messages)) return true;
-    return url.includes("openai.com");
-  },
-
   parseRequest(body: unknown): Conversation {
     if (!isRecord(body)) {
       return {
@@ -257,4 +251,4 @@ export const openaiChatParser: Parser = {
 };
 
 import { registerParser } from "./registry.js";
-registerParser(openaiChatParser);
+registerParser(openaiChatParser, "/chat/completions");

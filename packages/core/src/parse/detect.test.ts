@@ -123,9 +123,9 @@ describe("extractLatency", () => {
 describe("detectProvider", () => {
   beforeEach(() => {
     clearParsersForTesting();
-    registerParser(openaiChatParser);
-    registerParser(openaiResponsesParser);
-    registerParser(anthropicParser);
+    registerParser(openaiChatParser, "/chat/completions");
+    registerParser(openaiResponsesParser, "/responses");
+    registerParser(anthropicParser, "/v1/messages");
   });
 
   it("returns 'openai-chat' for /chat/completions URL with messages array body", () => {
@@ -156,9 +156,9 @@ describe("detectProvider", () => {
 describe("detectAndParse", () => {
   beforeEach(() => {
     clearParsersForTesting();
-    registerParser(openaiChatParser);
-    registerParser(openaiResponsesParser);
-    registerParser(anthropicParser);
+    registerParser(openaiChatParser, "/chat/completions");
+    registerParser(openaiResponsesParser, "/responses");
+    registerParser(anthropicParser, "/v1/messages");
   });
 
   function makeRecord(overrides: Partial<TraceRecord>): TraceRecord {
@@ -451,9 +451,9 @@ describe("detectAndParse", () => {
 describe("extractUsage", () => {
   beforeEach(() => {
     clearParsersForTesting();
-    registerParser(openaiChatParser);
-    registerParser(openaiResponsesParser);
-    registerParser(anthropicParser);
+    registerParser(openaiChatParser, "/chat/completions");
+    registerParser(openaiResponsesParser, "/responses");
+    registerParser(anthropicParser, "/v1/messages");
   });
 
   function makeRecord(overrides: Partial<TraceRecord>): TraceRecord {
@@ -582,9 +582,9 @@ describe("extractUsage", () => {
 describe("extractLatency (additional edge cases)", () => {
   beforeEach(() => {
     clearParsersForTesting();
-    registerParser(openaiChatParser);
-    registerParser(openaiResponsesParser);
-    registerParser(anthropicParser);
+    registerParser(openaiChatParser, "/chat/completions");
+    registerParser(openaiResponsesParser, "/responses");
+    registerParser(anthropicParser, "/v1/messages");
   });
 
   function makeRecord(overrides: Partial<TraceRecord>): TraceRecord {

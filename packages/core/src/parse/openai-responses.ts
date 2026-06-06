@@ -122,12 +122,6 @@ function extractInputMessages(input: unknown): Entry[] {
 export const openaiResponsesParser: Parser = {
   provider: "openai-responses",
 
-  match(url: string, body: unknown): boolean {
-    if (!url.includes("/responses")) return false;
-    if (isRecord(body) && body.input !== undefined) return true;
-    return url.includes("openai.com");
-  },
-
   parseRequest(body: unknown): Conversation {
     if (!isRecord(body)) {
       return {
@@ -356,4 +350,4 @@ export const openaiResponsesParser: Parser = {
 };
 
 import { registerParser } from "./registry.js";
-registerParser(openaiResponsesParser);
+registerParser(openaiResponsesParser, "/responses");

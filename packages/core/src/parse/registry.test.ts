@@ -4,12 +4,12 @@ import {
   clearParsersForTesting,
   getParsers,
   registerParser,
+  findParser,
 } from "./registry.js";
 
-function makeParser(provider: string, matchResult: boolean): Parser {
+function makeParser(provider: string): Parser {
   return {
     provider,
-    match: () => matchResult,
     parseRequest: (): Conversation => ({
       provider,
       model: null,
@@ -27,25 +27,44 @@ describe("parser registry", () => {
   });
 
   it("preserves registration order", () => {
-    registerParser(makeParser("a", false));
-    registerParser(makeParser("b", false));
+    registerParser(makeParser("a"), "/chat/completions");
+    registerParser(makeParser("b"), "/v1/messages");
 
     const providers = getParsers().map((p) => p.provider);
     expect(providers).toEqual(["a", "b"]);
   });
 
   it("throws on duplicate provider", () => {
-    registerParser(makeParser("dup", false));
-    expect(() => registerParser(makeParser("dup", false))).toThrow("dup");
+    registerParser(makeParser("dup"), "/chat/completions");
+    expect(() => registerParser(makeParser("dup"), "/other")).toThrow("dup");
   });
 
-  it("returns first registered parser in matching order", () => {
-    const first = makeParser("first", true);
-    const second = makeParser("second", true);
-    registerParser(first);
-    registerParser(second);
+  it("finds parser by path suffix", () => {
+    registerParser(makeParser("openai-chat"), "/chat/completions");
+    registerParser(makeParser("anthropic"), "/v1/messages");
 
-    const matched = getParsers().find((p) => p.match("/anything", {}));
-    expect(matched?.provider).toBe("first");
+    expect(findParser("https://api.openai.com/v1/chat/completions")?.provider).toBe("openai-chat");
+    expect(findParser("https://api.anthropic.com/v1/messages")?.provider).toBe("anthropic");
+    expect(findParser("https://example.com/unknown")).toBeNull();
+  });
+
+  it("matches hostPattern when provided", () => {
+    registerParser(makeParser("default-chat"), "/chat/completions");
+    registerParser(makeParser("custom-chat"), "/chat/completions", "custom.api.com");
+
+    expect(findParser("https://custom.api.com/v1/chat/completions")?.provider).toBe("custom-chat");
+    expect(findParser("https://other.api.com/v1/chat/completions")?.provider).toBe("default-chat");
+  });
+
+  it("falls back to first candidate when no hostPattern matches", () => {
+    registerParser(makeParser("a"), "/chat/completions", "a.com");
+    registerParser(makeParser("b"), "/chat/completions", "b.com");
+
+    expect(findParser("https://c.com/v1/chat/completions")?.provider).toBe("a");
+  });
+
+  it("returns null for invalid URL", () => {
+    registerParser(makeParser("test"), "/chat/completions");
+    expect(findParser("not-a-url")).toBeNull();
   });
 });

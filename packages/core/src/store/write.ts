@@ -7,9 +7,9 @@ import {
 import { join } from "node:path";
 import type { TraceRecord } from "../types.js";
 import { ConfigManager, initConfigManager } from "../state/index.js";
-import { logger } from "../logger.js";
 import type { StoreOptions } from "./read.js";
-import { resolveDir, readSessionMetadata, listSessions, safeReaddir } from "./read.js";
+import { resolveDir, readSessionMetadata, listSessions } from "./read.js";
+import { PARSED_CACHE_VERSION } from "../parse/index.js";
 
 async function getManager(traceDir: string): Promise<ConfigManager> {
   return initConfigManager(traceDir);
@@ -98,4 +98,19 @@ export async function deleteSessions(
   }
 
   return { deleted, errors };
+}
+
+export function writeParsedCache(
+  sessionId: string,
+  seq: number,
+  parsed: Record<string, unknown>,
+  options?: StoreOptions,
+): void {
+  const sessionDir = join(resolveDir(options), sessionId);
+  if (!existsSync(sessionDir)) {
+    mkdirSync(sessionDir, { recursive: true });
+  }
+  const cachePath = join(sessionDir, `${seq}.parsed`);
+  const data = { ...parsed, _pcv: PARSED_CACHE_VERSION };
+  writeFileSync(cachePath, JSON.stringify(data), "utf-8");
 }

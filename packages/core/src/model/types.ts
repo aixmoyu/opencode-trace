@@ -78,7 +78,6 @@ export interface Conversation {
 
 export interface Parser {
   readonly provider: string;
-  match(url: string, body: unknown): boolean;
   parseRequest(body: unknown): Conversation;
   parseResponse(body: unknown): Partial<Conversation>;
 }

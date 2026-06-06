@@ -19,10 +19,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 export const anthropicParser: Parser = {
   provider: "anthropic",
 
-  match(url: string, _body: unknown): boolean {
-    return url.includes("/v1/messages");
-  },
-
   parseRequest(body: unknown): Conversation {
     if (!isRecord(body)) {
       return {
@@ -221,4 +217,4 @@ export const anthropicParser: Parser = {
 };
 
 import { registerParser } from "./registry.js";
-registerParser(anthropicParser);
+registerParser(anthropicParser, "/v1/messages");

@@ -257,6 +257,11 @@ export async function createViewer(
                 requestAt: rec.requestAt,
                 parsed,
               });
+              setImmediate(() => {
+                try {
+                  store.writeParsedCache(sessionId, entry.seq, parsed as unknown as Record<string, unknown>, { traceDir: sessionTraceDir });
+                } catch { /* cache write is optional */ }
+              });
             }
           }
         }
@@ -402,6 +407,11 @@ export async function createViewer(
             if (rec) {
               const parsed = parse.detectAndParse(rec);
               metaRecords.push({ id: entry.seq, record: rec, parsed });
+              setImmediate(() => {
+                try {
+                  store.writeParsedCache(sessionId, entry.seq, parsed as unknown as Record<string, unknown>, { traceDir: sessionTraceDir });
+                } catch { /* cache write is optional */ }
+              });
             }
           }
         }
@@ -413,6 +423,11 @@ export async function createViewer(
         for (const rec of records) {
           const parsed = parse.detectAndParse(rec);
           metaRecords.push({ id: rec.id, record: rec, parsed });
+          setImmediate(() => {
+            try {
+              store.writeParsedCache(sessionId, rec.id, parsed as unknown as Record<string, unknown>, { traceDir: sessionTraceDir });
+            } catch { /* cache write is optional */ }
+          });
         }
       }
 
@@ -465,6 +480,11 @@ export async function createViewer(
         return { error: "Record not found" };
       }
       const parsed = parse.detectAndParse(rec);
+      setImmediate(() => {
+        try {
+          store.writeParsedCache(sessionId, rid, parsed as unknown as Record<string, unknown>, { traceDir: sessionTraceDir });
+        } catch { /* cache write is optional */ }
+      });
       return parsed;
     },
   );

@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { openaiResponsesParser } from "./openai-responses.js";
+import { clearParsersForTesting, registerParser, findParser } from "./registry.js";
 import type { ToolDefinitionBlock, ToolCallBlock } from "./types.js";
 
 describe("openaiResponsesParser.provider", () => {
@@ -8,85 +9,53 @@ describe("openaiResponsesParser.provider", () => {
   });
 });
 
-describe("openaiResponsesParser.match", () => {
-  const cases: Array<{ name: string; url: string; body: unknown; expected: boolean }> = [
+describe("openaiResponsesParser.findParser", () => {
+  beforeEach(() => {
+    clearParsersForTesting();
+    registerParser(openaiResponsesParser, "/responses");
+  });
+
+  const cases: Array<{ name: string; url: string; expected: boolean }> = [
     {
-      name: "matches /v1/responses when body has input",
+      name: "matches /v1/responses",
       url: "https://api.openai.com/v1/responses",
-      body: { model: "gpt-4o", input: "hello" },
       expected: true,
     },
     {
-      name: "matches /v1/responses with input as array",
-      url: "https://api.openai.com/v1/responses",
-      body: { model: "gpt-4o", input: [] },
-      expected: true,
-    },
-    {
-      name: "matches /responses path on non-openai host when body has input",
+      name: "matches /responses path on non-openai host",
       url: "https://proxy.example.com/v1/responses",
-      body: { input: "hi" },
       expected: true,
     },
     {
-      name: "matches /responses with query string when body has input",
+      name: "matches /responses with query string",
       url: "https://api.openai.com/v1/responses?stream=true",
-      body: { input: "hi" },
       expected: true,
     },
     {
-      name: "falls back to openai.com host match when body lacks input",
-      url: "https://api.openai.com/v1/responses",
-      body: { model: "gpt-4o" },
-      expected: true,
-    },
-    {
-      name: "does not match /chat/completions even on openai.com",
+      name: "does not match /chat/completions",
       url: "https://api.openai.com/v1/chat/completions",
-      body: { input: "hi" },
       expected: false,
     },
     {
       name: "does not match /v1/messages (anthropic path)",
       url: "https://api.anthropic.com/v1/messages",
-      body: { input: "hi" },
-      expected: false,
-    },
-    {
-      name: "does not match /v1/responses on non-openai host without body.input",
-      url: "https://proxy.example.com/v1/responses",
-      body: { model: "gpt-4o" },
-      expected: false,
-    },
-    {
-      name: "does not match empty body on non-openai host",
-      url: "https://proxy.example.com/v1/responses",
-      body: {},
-      expected: false,
-    },
-    {
-      name: "does not match null body on non-openai host",
-      url: "https://proxy.example.com/v1/responses",
-      body: null,
-      expected: false,
-    },
-    {
-      name: "does not match non-record body on non-openai host",
-      url: "https://proxy.example.com/v1/responses",
-      body: "not an object",
       expected: false,
     },
     {
       name: "does not match completely unrelated URL",
       url: "https://example.com/foo",
-      body: { input: "hi" },
       expected: false,
     },
   ];
 
   for (const c of cases) {
     it(c.name, () => {
-      expect(openaiResponsesParser.match(c.url, c.body)).toBe(c.expected);
+      const result = findParser(c.url);
+      if (c.expected) {
+        expect(result?.provider).toBe("openai-responses");
+      } else {
+        expect(result).toBeNull();
+      }
     });
   }
 });
@@ -659,6 +628,349 @@ describe("openaiResponsesParser.parseRequest", () => {
     expect(conv.msgs[0].id).toEqual(expect.any(String));
     expect(conv.msgs[0].id.length).toBeGreaterThan(0);
   });
+
+  describe("input messages with roles", () => {
+    it("parses input with system role message (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: "hi" },
+        ],
+      });
+      expect(conv.msgs).toHaveLength(2);
+      expect(conv.msgs[0].role).toBe("system");
+      expect(conv.msgs[0].blocks).toEqual([
+        { type: "text", text: "You are a helpful assistant." },
+      ]);
+      expect(conv.msgs[1].role).toBe("user");
+    });
+
+    it("parses input with developer role message (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: [
+          { role: "developer", content: "You are a developer assistant." },
+          { role: "user", content: "hi" },
+        ],
+      });
+      expect(conv.msgs).toHaveLength(2);
+      expect(conv.msgs[0].role).toBe("developer");
+      expect(conv.msgs[0].blocks).toEqual([
+        { type: "text", text: "You are a developer assistant." },
+      ]);
+    });
+
+    it("parses input with tool role and tool_call_id (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: [
+          { role: "assistant", content: "", tool_calls: [{ id: "call_1", type: "function", function: { name: "f", arguments: "{}" } }] },
+          { role: "tool", tool_call_id: "call_1", content: "result" },
+        ],
+      });
+      expect(conv.msgs).toHaveLength(2);
+      expect(conv.msgs[1].role).toBe("tool");
+      expect(conv.msgs[1].blocks[0]).toMatchObject({
+        type: "tr",
+        toolCallId: "call_1",
+        content: "result",
+      });
+    });
+
+    it("parses input with function_call items (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: [
+          { role: "user", content: "call f" },
+          { type: "function_call", id: "fc_1", call_id: "call_1", name: "f", arguments: "{}" },
+        ],
+      });
+      expect(conv.msgs).toHaveLength(2);
+      expect(conv.msgs[1].role).toBe("assistant");
+      expect(conv.msgs[1].blocks[0]).toMatchObject({
+        type: "tc",
+        id: "fc_1",
+        name: "f",
+        arguments: "{}",
+      });
+    });
+
+    it("parses input with function_call_output items (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: [
+          { role: "user", content: "call f" },
+          { type: "function_call_output", call_id: "call_1", output: "done" },
+        ],
+      });
+      expect(conv.msgs).toHaveLength(2);
+      expect(conv.msgs[1].role).toBe("tool");
+      expect(conv.msgs[1].blocks[0]).toMatchObject({
+        type: "tr",
+        toolCallId: "call_1",
+        content: "done",
+      });
+    });
+  });
+
+  describe("input content parts", () => {
+    it("parses input_image with file_id (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: "Describe this image" },
+              { type: "input_image", file_id: "file-abc123" },
+            ],
+          },
+        ],
+      });
+      expect(conv.msgs[0].blocks).toHaveLength(2);
+      expect(conv.msgs[0].blocks[0]).toEqual({ type: "text", text: "Describe this image" });
+      expect(conv.msgs[0].blocks[1]).toMatchObject({ type: "other" });
+      expect((conv.msgs[0].blocks[1] as { raw: Record<string, unknown> }).raw.type).toBe("image");
+    });
+
+    it("parses input_file with file_data (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: "Analyze this file" },
+              { type: "input_file", file_data: "base64content", filename: "doc.pdf" },
+            ],
+          },
+        ],
+      });
+      expect(conv.msgs[0].blocks).toHaveLength(2);
+      expect(conv.msgs[0].blocks[0]).toEqual({ type: "text", text: "Analyze this file" });
+      expect(conv.msgs[0].blocks[1]).toMatchObject({ type: "other" });
+      expect((conv.msgs[0].blocks[1] as { raw: Record<string, unknown> }).raw.type).toBe("file");
+    });
+
+    it("parses input with string content (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: [
+          { role: "user", content: "plain string content" },
+        ],
+      });
+      expect(conv.msgs[0].blocks).toEqual([
+        { type: "text", text: "plain string content" },
+      ]);
+    });
+
+    it("parses input with mixed string and record items", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: [
+          "first message",
+          { role: "user", content: "second message" },
+        ],
+      });
+      expect(conv.msgs).toHaveLength(2);
+      expect(conv.msgs[0].blocks).toEqual([{ type: "text", text: "first message" }]);
+      expect(conv.msgs[1].blocks).toEqual([{ type: "text", text: "second message" }]);
+    });
+  });
+
+  describe("request parameters", () => {
+    it("parses reasoning with effort (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        reasoning: { effort: "high" },
+      });
+      expect(conv.model).toBeNull();
+      expect(conv.msgs).toHaveLength(1);
+    });
+
+    it("parses text.format with json_schema (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        text: {
+          format: {
+            type: "json_schema",
+            name: "math_response",
+            schema: {
+              type: "object",
+              properties: {
+                steps: { type: "array", items: { type: "object" } },
+                final_answer: { type: "string" },
+              },
+            },
+          },
+        },
+      });
+      expect(conv.msgs).toHaveLength(1);
+    });
+
+    it("parses previous_response_id (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "continue",
+        previous_response_id: "resp_abc123",
+      });
+      expect(conv.msgs).toHaveLength(1);
+    });
+
+    it("parses tool_choice auto (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        tools: [{ type: "function", function: { name: "f", parameters: {} } }],
+        tool_choice: "auto",
+      });
+      expect(conv.tool?.blocks).toHaveLength(1);
+    });
+
+    it("parses tool_choice with specific function (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        tools: [{ type: "function", function: { name: "f", parameters: {} } }],
+        tool_choice: { type: "function", name: "f" },
+      });
+      expect(conv.tool?.blocks).toHaveLength(1);
+    });
+
+    it("parses temperature and top_p (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        temperature: 0.7,
+        top_p: 0.9,
+      });
+      expect(conv.msgs).toHaveLength(1);
+    });
+
+    it("parses max_output_tokens (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        max_output_tokens: 4096,
+      });
+      expect(conv.msgs).toHaveLength(1);
+    });
+
+    it("parses truncation auto (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        truncation: "auto",
+      });
+      expect(conv.msgs).toHaveLength(1);
+    });
+
+    it("parses parallel_tool_calls (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        parallel_tool_calls: false,
+      });
+      expect(conv.msgs).toHaveLength(1);
+    });
+
+    it("parses store (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        store: true,
+      });
+      expect(conv.msgs).toHaveLength(1);
+    });
+
+    it("parses stream flag (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        stream: true,
+      });
+      expect(conv.stream).toBe(true);
+    });
+
+    it("defaults stream to false when not set", () => {
+      const conv = openaiResponsesParser.parseRequest({ input: "hi" });
+      expect(conv.stream).toBe(false);
+    });
+  });
+
+  describe("tools with additional options", () => {
+    it("parses web_search_preview with user_location (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        tools: [
+          {
+            type: "web_search_preview",
+            user_location: {
+              type: "approximate",
+              city: "Beijing",
+              country: "CN",
+            },
+          },
+        ],
+      });
+      expect(conv.tool?.blocks[0]).toMatchObject({
+        type: "td",
+        name: "web_search_preview",
+      });
+    });
+
+    it("parses web_search_preview with filters (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        tools: [
+          {
+            type: "web_search_preview",
+            filters: { domain: "example.com" },
+          },
+        ],
+      });
+      expect(conv.tool?.blocks[0]).toMatchObject({
+        type: "td",
+        name: "web_search_preview",
+      });
+    });
+
+    it("parses web_search_preview with ranking_options (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        tools: [
+          {
+            type: "web_search_preview",
+            ranking_options: { ranker: "default_2025_03_11" },
+          },
+        ],
+      });
+      expect(conv.tool?.blocks[0]).toMatchObject({
+        type: "td",
+        name: "web_search_preview",
+      });
+    });
+
+    it("parses function tool with strict mode (real API style)", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        tools: [
+          {
+            type: "function",
+            strict: true,
+            function: {
+              name: "get_weather",
+              description: "Get weather",
+              parameters: {
+                type: "object",
+                properties: { city: { type: "string" } },
+                required: ["city"],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+      });
+      expect(conv.tool?.blocks[0]).toMatchObject({
+        type: "td",
+        name: "get_weather",
+      });
+    });
+
+    it("parses web_search_preview_2025_03_11 as web_search_preview", () => {
+      const conv = openaiResponsesParser.parseRequest({
+        input: "hi",
+        tools: [{ type: "web_search_preview_2025_03_11" }],
+      });
+      expect(conv.tool?.blocks[0]).toMatchObject({
+        type: "td",
+        name: "web_search_preview",
+      });
+    });
+  });
 });
 
 describe("openaiResponsesParser.parseResponse", () => {
@@ -859,6 +1171,199 @@ describe("openaiResponsesParser.parseResponse", () => {
       expect(result.msgs![0].blocks).toEqual([
         { type: "other", raw: { type: "computer_use" } },
       ]);
+    });
+
+    it("parses computer_call_output as tool result (real API style)", () => {
+      const result = openaiResponsesParser.parseResponse({
+        output: [
+          {
+            type: "computer_call_output",
+            call_id: "cu_1",
+            output: {
+              type: "computer_screenshot",
+              file_id: "file-abc",
+            },
+          },
+        ],
+      });
+      expect(result.msgs![0].role).toBe("assistant");
+      expect(result.msgs![0].blocks[0]).toMatchObject({
+        type: "other",
+        raw: { type: "computer_call_output" },
+      });
+    });
+
+    it("parses web_search_call with search_results (real API style)", () => {
+      const result = openaiResponsesParser.parseResponse({
+        output: [
+          {
+            type: "web_search_call",
+            id: "ws_1",
+            status: "completed",
+            search_results: [
+              {
+                title: "Result 1",
+                url: "https://example.com/1",
+                snippet: "Snippet 1",
+              },
+              {
+                title: "Result 2",
+                url: "https://example.com/2",
+                snippet: "Snippet 2",
+              },
+            ],
+          },
+        ],
+      });
+      expect(result.msgs![0].blocks).toEqual([
+        { type: "other", raw: { type: "web_search", status: "completed" } },
+      ]);
+    });
+
+    it("parses output_text with url_citation annotations (real API style)", () => {
+      const result = openaiResponsesParser.parseResponse({
+        output: [
+          {
+            type: "message",
+            role: "assistant",
+            content: [
+              {
+                type: "output_text",
+                text: "中国科学家在可再生能源领域取得重大突破",
+                annotations: [
+                  {
+                    type: "url_citation",
+                    start_index: 0,
+                    end_index: 20,
+                    url: "https://example.com/renewable-energy",
+                    title: "可再生能源突破",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      expect(result.msgs![0].blocks).toEqual([
+        { type: "text", text: "中国科学家在可再生能源领域取得重大突破" },
+      ]);
+    });
+
+    it("parses output_text with file_citation annotations (real API style)", () => {
+      const result = openaiResponsesParser.parseResponse({
+        output: [
+          {
+            type: "message",
+            role: "assistant",
+            content: [
+              {
+                type: "output_text",
+                text: "According to the document, the answer is 42.",
+                annotations: [
+                  {
+                    type: "file_citation",
+                    index: 0,
+                    file_id: "file-abc123",
+                    filename: "research.pdf",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      expect(result.msgs![0].blocks).toEqual([
+        { type: "text", text: "According to the document, the answer is 42." },
+      ]);
+    });
+
+    it("parses full web search response with call + message + annotations (real API style)", () => {
+      const result = openaiResponsesParser.parseResponse({
+        output: [
+          {
+            type: "web_search_call",
+            id: "ws_1",
+            status: "completed",
+          },
+          {
+            type: "message",
+            role: "assistant",
+            content: [
+              {
+                type: "output_text",
+                text: "根据搜索结果，最新进展包括...",
+                annotations: [
+                  {
+                    type: "url_citation",
+                    start_index: 0,
+                    end_index: 15,
+                    url: "https://example.com/news",
+                    title: "最新进展",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        usage: {
+          input_tokens: 328,
+          output_tokens: 356,
+          input_tokens_details: { cached_tokens: 0 },
+        },
+      });
+      expect(result.msgs).toHaveLength(2);
+      expect(result.msgs![0].blocks[0]).toMatchObject({
+        type: "other",
+        raw: { type: "web_search" },
+      });
+      expect(result.msgs![1].blocks[0]).toEqual({
+        type: "text",
+        text: "根据搜索结果，最新进展包括...",
+      });
+      expect(result.usage).toEqual({
+        inputMissTokens: 328,
+        inputHitTokens: null,
+        outputTokens: 356,
+      });
+    });
+
+    it("parses full file search response with call + message (real API style)", () => {
+      const result = openaiResponsesParser.parseResponse({
+        output: [
+          {
+            type: "file_search_call",
+            id: "fs_1",
+            status: "completed",
+          },
+          {
+            type: "message",
+            role: "assistant",
+            content: [
+              {
+                type: "output_text",
+                text: "The document contains the following information...",
+                annotations: [
+                  {
+                    type: "file_citation",
+                    index: 0,
+                    file_id: "file-xyz",
+                    filename: "report.pdf",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      expect(result.msgs).toHaveLength(2);
+      expect(result.msgs![0].blocks[0]).toMatchObject({
+        type: "other",
+        raw: { type: "file_search" },
+      });
+      expect(result.msgs![1].blocks[0]).toEqual({
+        type: "text",
+        text: "The document contains the following information...",
+      });
     });
 
     it("parses function_call_output item from response as tool result", () => {

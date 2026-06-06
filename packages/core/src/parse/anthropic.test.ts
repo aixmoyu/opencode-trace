@@ -1,18 +1,21 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { anthropicParser } from "./anthropic.js";
+import { clearParsersForTesting, registerParser, findParser } from "./registry.js";
 
 describe("anthropicParser", () => {
-  describe("match", () => {
+  describe("findParser", () => {
+    beforeEach(() => {
+      clearParsersForTesting();
+      registerParser(anthropicParser, "/v1/messages");
+    });
+
     it.each([
       ["https://api.anthropic.com/v1/messages"],
       ["https://api.anthropic.com/v1/messages?beta=true"],
       ["https://api.anthropic.com/v1/messages?foo=bar&baz=qux"],
       ["https://example.com/proxy/v1/messages"],
-      ["POST /v1/messages"],
-      // Substring match is permissive: anything containing "/v1/messages" matches.
-      ["https://api.anthropic.com/v1/messagesbeta"],
-    ])("returns true for %s", (url) => {
-      expect(anthropicParser.match(url, {})).toBe(true);
+    ])("returns anthropic for %s", (url) => {
+      expect(findParser(url)?.provider).toBe("anthropic");
     });
 
     it.each([
@@ -22,8 +25,8 @@ describe("anthropicParser", () => {
       [""],
       ["/v1/completions"],
       ["/chat/completions"],
-    ])("returns false for %s", (url) => {
-      expect(anthropicParser.match(url, {})).toBe(false);
+    ])("returns null for %s", (url) => {
+      expect(findParser(url)).toBeNull();
     });
   });
 
@@ -93,6 +96,29 @@ describe("anthropicParser", () => {
         { type: "text", text: "First instruction." },
         { type: "text", text: "Second instruction." },
         { type: "text", text: "Third instruction as raw string." },
+      ]);
+    });
+
+    it("ignores cache_control in user content blocks (real API style)", () => {
+      const result = anthropicParser.parseRequest({
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "hello",
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(result.msgs![0]?.blocks).toEqual([
+        { type: "text", text: "hello" },
       ]);
     });
 
@@ -575,6 +601,25 @@ describe("anthropicParser", () => {
       expect(result.usage).toEqual({
         inputMissTokens: 20,
         inputHitTokens: 80,
+        outputTokens: 50,
+      });
+    });
+
+    it("ignores cache_creation_input_tokens in usage (real API style)", () => {
+      const result = anthropicParser.parseResponse({
+        model: "claude-3-5-sonnet-20241022",
+        content: [{ type: "text", text: "ok" }],
+        usage: {
+          input_tokens: 100,
+          output_tokens: 50,
+          cache_read_input_tokens: 30,
+          cache_creation_input_tokens: 10,
+        },
+      });
+
+      expect(result.usage).toEqual({
+        inputMissTokens: 70,
+        inputHitTokens: 30,
         outputTokens: 50,
       });
     });

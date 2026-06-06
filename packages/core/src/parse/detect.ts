@@ -1,6 +1,6 @@
 import type { TraceRecord } from "../types.js";
 import type { Conversation, Entry } from "./types.js";
-import { getParsers } from "./registry.js";
+import { findParser } from "./registry.js";
 import { createMsgEntry, createTextBlock } from "./utils.js";
 import {
   sseOpenaiChatParse,
@@ -64,7 +64,7 @@ export function detectAndParse(record: TraceRecord): Conversation {
   const reqBody = record.request.body;
   const resBody = record.response?.body;
 
-  const parser = getParsers().find((p) => p.match(url, reqBody));
+  const parser = findParser(url);
   if (!parser) return fallbackParse(reqBody, resBody);
 
   const reqParsed = parser.parseRequest(reqBody);
@@ -97,8 +97,8 @@ export function detectAndParse(record: TraceRecord): Conversation {
   };
 }
 
-export function detectProvider(url: string, body: unknown): string | null {
-  const parser = getParsers().find((p) => p.match(url, body));
+export function detectProvider(url: string, _body?: unknown): string | null {
+  const parser = findParser(url);
   return parser?.provider ?? null;
 }
 
@@ -107,7 +107,7 @@ export function extractUsage(record: TraceRecord): Conversation["usage"] {
   const reqBody = record.request.body;
   const resBody = record.response?.body;
 
-  const parser = getParsers().find((p) => p.match(url, reqBody));
+  const parser = findParser(url);
   if (!parser) return null;
 
   const reqParsed = parser.parseRequest(reqBody);

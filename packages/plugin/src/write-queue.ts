@@ -32,7 +32,7 @@ export class AsyncWriteQueue {
   private defaultTraceDir: string;
   private batchSize: number;
 
-  constructor(traceDir: string, batchSize: number = 10) {
+  constructor(traceDir: string, batchSize: number = 50) {
     this.defaultTraceDir = traceDir;
     this.batchSize = batchSize;
   }
@@ -102,32 +102,43 @@ export class AsyncWriteQueue {
       forceFallback?: boolean;
     }>,
   ): Promise<void> {
-    for (const { session, seq, record, timelineEntry, traceDir, forceFallback } of items) {
-      try {
-        if (forceFallback) {
-          await this.writeFallback(
-            session,
-            seq,
-            record,
-            new Error("Queue is closed"),
-            traceDir,
-          );
-          continue;
-        }
-        const sessionDir = join(traceDir, session);
-        await fs.mkdir(sessionDir, { recursive: true });
+    await Promise.all(items.map(({ session, seq, record, timelineEntry, traceDir, forceFallback }) =>
+      this.writeOne(session, seq, record, timelineEntry, traceDir, forceFallback)
+    ));
+  }
 
-        const tmpPath = join(sessionDir, `${seq}.json.tmp`);
-        const finalPath = join(sessionDir, `${seq}.json`);
-        await fs.writeFile(tmpPath, JSON.stringify(record, null, 2));
-        await safeRename(tmpPath, finalPath);
-
-        if (timelineEntry) {
-          await this.appendTimeline(sessionDir, timelineEntry);
-        }
-      } catch (err) {
-        await this.writeFallback(session, seq, record, err as Error, traceDir);
+  private async writeOne(
+    session: string,
+    seq: number,
+    record: TraceRecord,
+    timelineEntry: TimelineEntry | undefined,
+    traceDir: string,
+    forceFallback?: boolean,
+  ): Promise<void> {
+    try {
+      if (forceFallback) {
+        await this.writeFallback(
+          session,
+          seq,
+          record,
+          new Error("Queue is closed"),
+          traceDir,
+        );
+        return;
       }
+      const sessionDir = join(traceDir, session);
+      await fs.mkdir(sessionDir, { recursive: true });
+
+      const tmpPath = join(sessionDir, `${seq}.json.tmp`);
+      const finalPath = join(sessionDir, `${seq}.json`);
+      await fs.writeFile(tmpPath, JSON.stringify(record, null, 2));
+      await safeRename(tmpPath, finalPath);
+
+      if (timelineEntry) {
+        await this.appendTimeline(sessionDir, timelineEntry);
+      }
+    } catch (err) {
+      await this.writeFallback(session, seq, record, err as Error, traceDir);
     }
   }
   /**

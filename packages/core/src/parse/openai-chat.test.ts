@@ -1,54 +1,32 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { openaiChatParser } from "./openai-chat.js";
+import { clearParsersForTesting, registerParser, findParser } from "./registry.js";
 
 describe("openaiChatParser", () => {
-  describe("match", () => {
-    it("matches /chat/completions URL with body that has messages array", () => {
-      expect(
-        openaiChatParser.match("https://api.openai.com/v1/chat/completions", {
-          messages: [{ role: "user", content: "hi" }],
-        }),
-      ).toBe(true);
+  describe("findParser", () => {
+    beforeEach(() => {
+      clearParsersForTesting();
+      registerParser(openaiChatParser, "/chat/completions");
     });
 
-    it("returns false for URL without /chat/completions", () => {
-      expect(
-        openaiChatParser.match("https://api.openai.com/v1/embeddings", {
-          messages: [],
-        }),
-      ).toBe(false);
+    it("matches /chat/completions URL regardless of host", () => {
+      expect(findParser("https://api.openai.com/v1/chat/completions")?.provider).toBe("openai-chat");
     });
 
-    it("returns false for /chat/completions URL on non-openai host with empty body", () => {
-      expect(
-        openaiChatParser.match("https://example.com/chat/completions", {}),
-      ).toBe(false);
+    it("matches /chat/completions on proxy host", () => {
+      expect(findParser("https://proxy.example.com/v1/chat/completions")?.provider).toBe("openai-chat");
     });
 
-    it("returns true for /chat/completions URL on openai.com even with empty body", () => {
-      expect(
-        openaiChatParser.match("https://api.openai.com/v1/chat/completions", {}),
-      ).toBe(true);
+    it("matches /chat/completions with query string", () => {
+      expect(findParser("https://api.openai.com/v1/chat/completions?stream=true")?.provider).toBe("openai-chat");
     });
 
-    it("returns false for /chat/completions URL on non-openai host with body.messages as non-array", () => {
-      expect(
-        openaiChatParser.match("https://example.com/chat/completions", {
-          messages: "not an array",
-        }),
-      ).toBe(false);
+    it("returns null for URL without /chat/completions", () => {
+      expect(findParser("https://api.openai.com/v1/embeddings")).toBeNull();
     });
 
-    it("returns false for non-record body with /chat/completions on non-openai host", () => {
-      expect(
-        openaiChatParser.match("https://example.com/chat/completions", null),
-      ).toBe(false);
-    });
-
-    it("returns false for non-record body on openai.com without /chat/completions", () => {
-      expect(
-        openaiChatParser.match("https://api.openai.com/v1/embeddings", null),
-      ).toBe(false);
+    it("returns null for unrelated URL", () => {
+      expect(findParser("https://example.com/other")).toBeNull();
     });
   });
 
@@ -90,6 +68,18 @@ describe("openaiChatParser", () => {
       expect(
         openaiChatParser.parseRequest({ model: 123, messages: [] }).model,
       ).toBeNull();
+    });
+
+    it("ignores max_tokens field (real API style)", () => {
+      const result = openaiChatParser.parseRequest({
+        model: "GLM-5.1",
+        max_tokens: 32000,
+        messages: [{ role: "user", content: "hi" }],
+      });
+
+      expect(result.model).toBe("GLM-5.1");
+      expect(result.msgs!).toHaveLength(1);
+      expect(result.msgs![0]?.blocks).toEqual([{ type: "text", text: "hi" }]);
     });
 
     it("sets stream=true when body.stream is true", () => {

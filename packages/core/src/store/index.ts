@@ -27,6 +27,7 @@ export {
   writeRecord,
   initStore,
   writeSessionMetadata,
+  writeParsedCache,
   deleteSession,
   deleteSessions,
 } from "./write.js";

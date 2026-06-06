@@ -23,6 +23,12 @@ export {
 } from "./detect.js";
 export type { LatencyInfo } from "./detect.js";
 export {
+  registerParser,
+  findParser,
+  getRegistrations,
+  clearRegistrations,
+} from "./registry.js";
+export {
   generateId,
   createSysEntry,
   createToolEntry,

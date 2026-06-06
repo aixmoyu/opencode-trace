@@ -89,6 +89,20 @@ export function safeReaddir(dir: string): string[] {
   }
 }
 
+function safeReaddirWithTypes(dir: string): Array<{ name: string; isDirectory: () => boolean }> {
+  try {
+    return readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    const errCode = (err as NodeJS.ErrnoException).code;
+    if (errCode === "ENOENT") {
+      logger.warn("Trace directory does not exist", { dir });
+    } else {
+      logger.error("Failed to read directory", { dir, error: String(err) });
+    }
+    return [];
+  }
+}
+
 function getManagerSync(traceDir: string): ConfigManager | null {
   return hasConfigManager(traceDir) ? getConfigManager(traceDir) : null;
 }
@@ -114,13 +128,12 @@ export function listSessions(options?: StoreOptions): SessionMeta[] {
     return manager.listSessions().map(sessionStateToMeta);
   }
 
-  const entries = safeReaddir(base);
+  const entries = safeReaddirWithTypes(base);
   const sessions: SessionMeta[] = [];
     for (const entry of entries) {
-      const full = join(base, entry);
+      if (!entry.isDirectory()) continue;
+      const full = join(base, entry.name);
       try {
-        const stat = statSync(full);
-        if (!stat.isDirectory()) continue;
 
         let title: string | undefined;
         let parentID: string | undefined;
@@ -200,7 +213,7 @@ export function listSessions(options?: StoreOptions): SessionMeta[] {
         }
 
         sessions.push({
-          id: entry,
+          id: entry.name,
           requestCount,
           createdAt,
           updatedAt,
@@ -211,7 +224,7 @@ export function listSessions(options?: StoreOptions): SessionMeta[] {
 
     } catch (err) {
       logger.error("Failed to process session entry for listing", {
-        entry,
+        entry: entry.name,
         traceDir: base,
         error: String(err),
       });

@@ -172,6 +172,31 @@ export function sseOpenaiResponsesParse(raw: string): SSEParseResult {
           inputHitTokens: cachedTokens > 0 ? cachedTokens : null,
           outputTokens: outputTokens > 0 ? outputTokens : null,
         };
+      } else if (isRecord(parsed.response) && isRecord(parsed.response.usage)) {
+        const respUsage = parsed.response.usage;
+        const inputDetails = isRecord(respUsage.input_tokens_details)
+          ? respUsage.input_tokens_details
+          : {};
+
+        const inputTokens =
+          typeof respUsage.input_tokens === "number"
+            ? respUsage.input_tokens
+            : 0;
+        const outputTokens =
+          typeof respUsage.output_tokens === "number"
+            ? respUsage.output_tokens
+            : 0;
+        const cachedTokens =
+          typeof inputDetails.cached_tokens === "number"
+            ? inputDetails.cached_tokens
+            : 0;
+        const inputMiss = inputTokens - cachedTokens;
+
+        usage = {
+          inputMissTokens: inputMiss > 0 ? inputMiss : null,
+          inputHitTokens: cachedTokens > 0 ? cachedTokens : null,
+          outputTokens: outputTokens > 0 ? outputTokens : null,
+        };
       }
 
       if (type === "response.output_text.delta") {
@@ -289,18 +314,25 @@ export function sseAnthropicParse(raw: string): SSEParseResult {
       if (!isRecord(parsed)) continue;
       const type = parsed.type;
 
-      if (isRecord(parsed.usage)) {
+      const usageData =
+        isRecord(parsed.usage)
+          ? parsed.usage
+          : isRecord(parsed.message) && isRecord(parsed.message.usage)
+            ? parsed.message.usage
+            : null;
+
+      if (usageData) {
         const inputTokens =
-          typeof parsed.usage.input_tokens === "number"
-            ? parsed.usage.input_tokens
+          typeof usageData.input_tokens === "number"
+            ? usageData.input_tokens
             : 0;
         const outputTokens =
-          typeof parsed.usage.output_tokens === "number"
-            ? parsed.usage.output_tokens
+          typeof usageData.output_tokens === "number"
+            ? usageData.output_tokens
             : 0;
         const cachedTokens =
-          typeof parsed.usage.cache_read_input_tokens === "number"
-            ? parsed.usage.cache_read_input_tokens
+          typeof usageData.cache_read_input_tokens === "number"
+            ? usageData.cache_read_input_tokens
             : 0;
         const inputMiss = inputTokens - cachedTokens;
 

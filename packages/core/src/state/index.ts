@@ -6,7 +6,6 @@ import {
   readdirSync,
   readFileSync,
   writeFileSync,
-  statSync,
 } from "node:fs";
 import { promises as fs } from "node:fs";
 import type { TraceRecord } from "../types.js";
@@ -222,16 +221,10 @@ export class ConfigManager {
 
   private scanFsSessions(): string[] {
     try {
-      const entries = readdirSync(this.traceDir);
-      return entries.filter((e) => {
-        const full = join(this.traceDir, e);
-        try {
-          const stat = statSync(full);
-          return stat.isDirectory();
-        } catch {
-          return false;
-        }
-      });
+      const entries = readdirSync(this.traceDir, { withFileTypes: true });
+      return entries
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
     } catch (err) {
       logger.error("Failed to scan filesystem sessions", {
         traceDir: this.traceDir,

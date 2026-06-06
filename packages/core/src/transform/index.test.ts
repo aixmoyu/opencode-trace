@@ -152,6 +152,21 @@ describe("sseOpenaiChatParse", () => {
     expect(result.messages).toHaveLength(1);
     expect(textOf(result.messages[0].blocks)).toBe("recovered");
   });
+
+  it("ignores model, object, created, id fields in chunks (real API style)", () => {
+    const raw =
+      'data: {"id":"chatcmpl-64aeb901","created":1780631328,"model":"GLM-5.1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"reasoning_content":"The","role":"assistant"}}]}\n\n' +
+      'data: {"id":"chatcmpl-64aeb901","created":1780631328,"model":"GLM-5.1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"reasoning_content":" user"}}]}\n\n' +
+      'data: {"id":"chatcmpl-64aeb901","created":1780631328,"model":"GLM-5.1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"}}]}\n\n' +
+      "data: [DONE]\n\n";
+    const result = sseOpenaiChatParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].blocks).toHaveLength(2);
+    expect(result.messages[0].blocks[0].type).toBe("thinking");
+    expect(thinkingOf(result.messages[0].blocks)).toBe("The user");
+    expect(result.messages[0].blocks[1].type).toBe("text");
+    expect(textOf(result.messages[0].blocks.slice(1))).toBe("Hello");
+  });
 });
 
 describe("sseOpenaiChatToMessages", () => {
@@ -314,6 +329,150 @@ describe("sseOpenaiResponsesParse", () => {
     expect(result.messages).toHaveLength(1);
     expect(textOf(result.messages[0].blocks)).toBe("Hello world");
   });
+
+  it("ignores response.created and response.in_progress events (real API style)", () => {
+    const raw =
+      'event: response.created\n' +
+      'data: {"type":"response.created","response":{"id":"resp_1","status":"in_progress","output":[]}}\n\n' +
+      'event: response.in_progress\n' +
+      'data: {"type":"response.in_progress","response":{"id":"resp_1","status":"in_progress","output":[]}}\n\n' +
+      'event: response.output_text.delta\n' +
+      'data: {"type":"response.output_text.delta","output_index":0,"delta":"hi"}\n\n' +
+      'event: response.completed\n' +
+      'data: {"type":"response.completed"}\n\n';
+    const result = sseOpenaiResponsesParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(textOf(result.messages[0].blocks)).toBe("hi");
+  });
+
+  it("ignores response.content_part.added and response.content_part.done events (real API style)", () => {
+    const raw =
+      'event: response.content_part.added\n' +
+      'data: {"type":"response.content_part.added","item_id":"msg_1","output_index":0,"content_index":0,"part":{"type":"output_text","text":"","annotations":[]}}\n\n' +
+      'event: response.output_text.delta\n' +
+      'data: {"type":"response.output_text.delta","item_id":"msg_1","output_index":0,"content_index":0,"delta":"Hello"}\n\n' +
+      'event: response.output_text.done\n' +
+      'data: {"type":"response.output_text.done","item_id":"msg_1","output_index":0,"content_index":0,"text":"Hello"}\n\n' +
+      'event: response.content_part.done\n' +
+      'data: {"type":"response.content_part.done","item_id":"msg_1","output_index":0,"content_index":0,"part":{"type":"output_text","text":"Hello","annotations":[]}}\n\n' +
+      'event: response.completed\n' +
+      'data: {"type":"response.completed"}\n\n';
+    const result = sseOpenaiResponsesParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(textOf(result.messages[0].blocks)).toBe("Hello");
+  });
+
+  it("ignores response.output_text.done event (real API style)", () => {
+    const raw =
+      'event: response.output_text.delta\n' +
+      'data: {"type":"response.output_text.delta","output_index":0,"delta":"Hello"}\n\n' +
+      'event: response.output_text.done\n' +
+      'data: {"type":"response.output_text.done","output_index":0,"text":"Hello"}\n\n' +
+      'event: response.completed\n' +
+      'data: {"type":"response.completed"}\n\n';
+    const result = sseOpenaiResponsesParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(textOf(result.messages[0].blocks)).toBe("Hello");
+  });
+
+  it("ignores response.reasoning_summary_text.done event (real API style)", () => {
+    const raw =
+      'event: response.reasoning_summary_text.delta\n' +
+      'data: {"type":"response.reasoning_summary_text.delta","delta":"thinking"}\n\n' +
+      'event: response.reasoning_summary_text.done\n' +
+      'data: {"type":"response.reasoning_summary_text.done","text":"thinking"}\n\n' +
+      'event: response.completed\n' +
+      'data: {"type":"response.completed"}\n\n';
+    const result = sseOpenaiResponsesParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(thinkingOf(result.messages[0].blocks)).toBe("thinking");
+  });
+
+  it("ignores response.function_call_arguments.done event (real API style)", () => {
+    const raw =
+      'event: response.output_item.added\n' +
+      'data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","id":"fc_1","name":"f"}}\n\n' +
+      'event: response.function_call_arguments.delta\n' +
+      'data: {"type":"response.function_call_arguments.delta","output_index":0,"delta":"{}"}\n\n' +
+      'event: response.function_call_arguments.done\n' +
+      'data: {"type":"response.function_call_arguments.done","output_index":0,"arguments":"{}"}\n\n' +
+      'event: response.output_item.done\n' +
+      'data: {"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","id":"fc_1","name":"f","arguments":"{}"}}\n\n' +
+      'event: response.completed\n' +
+      'data: {"type":"response.completed"}\n\n';
+    const result = sseOpenaiResponsesParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(toolCallOf(result.messages[0].blocks, 0).name).toBe("f");
+  });
+
+  it("captures usage from response.completed with nested response object (real API style)", () => {
+    const raw =
+      'event: response.output_text.delta\n' +
+      'data: {"type":"response.output_text.delta","output_index":0,"delta":"hi"}\n\n' +
+      'event: response.completed\n' +
+      'data: {"type":"response.completed","response":{"id":"resp_1","status":"completed","usage":{"input_tokens":37,"output_tokens":11,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":48}}}\n\n';
+    const result = sseOpenaiResponsesParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(textOf(result.messages[0].blocks)).toBe("hi");
+    expect(result.usage).toEqual({
+      inputMissTokens: 37,
+      inputHitTokens: null,
+      outputTokens: 11,
+    });
+  });
+
+  it("handles full streaming flow with all event types (real API style)", () => {
+    const raw =
+      'event: response.created\n' +
+      'data: {"type":"response.created","response":{"id":"resp_1","status":"in_progress","output":[]}}\n\n' +
+      'event: response.in_progress\n' +
+      'data: {"type":"response.in_progress","response":{"id":"resp_1","status":"in_progress","output":[]}}\n\n' +
+      'event: response.output_item.added\n' +
+      'data: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_1","type":"message","status":"in_progress","role":"assistant","content":[]}}\n\n' +
+      'event: response.content_part.added\n' +
+      'data: {"type":"response.content_part.added","item_id":"msg_1","output_index":0,"content_index":0,"part":{"type":"output_text","text":"","annotations":[]}}\n\n' +
+      'event: response.output_text.delta\n' +
+      'data: {"type":"response.output_text.delta","item_id":"msg_1","output_index":0,"content_index":0,"delta":"Hello"}\n\n' +
+      'event: response.output_text.delta\n' +
+      'data: {"type":"response.output_text.delta","item_id":"msg_1","output_index":0,"content_index":0,"delta":" world"}\n\n' +
+      'event: response.output_text.done\n' +
+      'data: {"type":"response.output_text.done","item_id":"msg_1","output_index":0,"content_index":0,"text":"Hello world"}\n\n' +
+      'event: response.content_part.done\n' +
+      'data: {"type":"response.content_part.done","item_id":"msg_1","output_index":0,"content_index":0,"part":{"type":"output_text","text":"Hello world","annotations":[]}}\n\n' +
+      'event: response.output_item.done\n' +
+      'data: {"type":"response.output_item.done","output_index":0,"item":{"id":"msg_1","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"Hello world","annotations":[]}]}}\n\n' +
+      'event: response.completed\n' +
+      'data: {"type":"response.completed","response":{"id":"resp_1","status":"completed","usage":{"input_tokens":10,"output_tokens":2,"total_tokens":12}}}\n\n';
+    const result = sseOpenaiResponsesParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(textOf(result.messages[0].blocks)).toBe("Hello world");
+    expect(result.usage).toEqual({
+      inputMissTokens: 10,
+      inputHitTokens: null,
+      outputTokens: 2,
+    });
+  });
+
+  it("handles reasoning + text combined in a single stream (real API style)", () => {
+    const raw =
+      'event: response.reasoning_summary_text.delta\n' +
+      'data: {"type":"response.reasoning_summary_text.delta","delta":"Let me think"}\n\n' +
+      'event: response.reasoning_summary_text.delta\n' +
+      'data: {"type":"response.reasoning_summary_text.delta","delta":" about this"}\n\n' +
+      'event: response.reasoning_summary_text.done\n' +
+      'data: {"type":"response.reasoning_summary_text.done","text":"Let me think about this"}\n\n' +
+      'event: response.output_text.delta\n' +
+      'data: {"type":"response.output_text.delta","output_index":0,"delta":"Final answer"}\n\n' +
+      'event: response.completed\n' +
+      'data: {"type":"response.completed"}\n\n';
+    const result = sseOpenaiResponsesParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].blocks).toHaveLength(2);
+    expect(result.messages[0].blocks[0].type).toBe("thinking");
+    expect(thinkingOf(result.messages[0].blocks)).toBe("Let me think about this");
+    expect(result.messages[0].blocks[1].type).toBe("text");
+    expect(textOf(result.messages[0].blocks.slice(1))).toBe("Final answer");
+  });
 });
 
 describe("sseOpenaiResponsesToMessages", () => {
@@ -461,6 +620,62 @@ describe("sseAnthropicParse", () => {
     const result = sseAnthropicParse(raw);
     expect(result.messages).toEqual([]);
     expect(result.usage).toBeNull();
+  });
+
+  it("ignores ping events (real API style)", () => {
+    const raw =
+      'event: ping\n' +
+      'data: {}\n\n' +
+      'event: content_block_start\n' +
+      'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n' +
+      'event: content_block_delta\n' +
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n' +
+      'event: content_block_stop\n' +
+      'data: {"type":"content_block_stop","index":0}\n\n' +
+      'event: message_stop\n' +
+      'data: {"type":"message_stop"}\n\n';
+    const result = sseAnthropicParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(textOf(result.messages[0].blocks)).toBe("hi");
+  });
+
+  it("ignores signature_delta events (real API style)", () => {
+    const raw =
+      'event: content_block_start\n' +
+      'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n' +
+      'event: content_block_delta\n' +
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n' +
+      'event: content_block_delta\n' +
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig123"}}\n\n' +
+      'event: content_block_stop\n' +
+      'data: {"type":"content_block_stop","index":0}\n\n' +
+      'event: message_stop\n' +
+      'data: {"type":"message_stop"}\n\n';
+    const result = sseAnthropicParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(textOf(result.messages[0].blocks)).toBe("hi");
+  });
+
+  it("captures usage from message_start event (real API style)", () => {
+    const raw =
+      'event: message_start\n' +
+      'data: {"type":"message_start","message":{"id":"msg_01","type":"message","role":"assistant","model":"MiniMax-M3","content":[],"usage":{"input_tokens":100,"output_tokens":0,"cache_read_input_tokens":50,"cache_creation_input_tokens":10}}}\n\n' +
+      'event: content_block_start\n' +
+      'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n' +
+      'event: content_block_delta\n' +
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}\n\n' +
+      'event: content_block_stop\n' +
+      'data: {"type":"content_block_stop","index":0}\n\n' +
+      'event: message_stop\n' +
+      'data: {"type":"message_stop"}\n\n';
+    const result = sseAnthropicParse(raw);
+    expect(result.messages).toHaveLength(1);
+    expect(textOf(result.messages[0].blocks)).toBe("hi");
+    expect(result.usage).toEqual({
+      inputMissTokens: 50,
+      inputHitTokens: 50,
+      outputTokens: null,
+    });
   });
 });
 
