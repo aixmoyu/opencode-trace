@@ -386,6 +386,8 @@ export async function createViewer(
         id: number;
         record?: import("@opencode-trace/core").TraceRecord;
         parsed: MetaConversation;
+        requestAt?: string;
+        responseAt?: string;
       }
       const metaRecords: MetaRecord[] = [];
 
@@ -400,6 +402,8 @@ export async function createViewer(
               id: entry.seq,
               record: undefined,
               parsed: cached as unknown as MetaConversation,
+              requestAt: entry.requestAt,
+              responseAt: entry.responseAt ?? undefined,
             });
           } else {
             const rec = store.getRecord(sessionId, entry.seq, {

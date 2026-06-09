@@ -13,9 +13,9 @@
   --oc-dark-surface: #302c2c;
   --oc-border-gray: #646262;
   --oc-light-surface: #f1eeee;
-  --accent: #3d8bff;
-  --accent-hover: #1a6fff;
-  --accent-active: #0056b3;
+  --accent: #007aff;
+  --accent-hover: #0056b3;
+  --accent-active: #004085;
   --danger: #ff3b30;
   --danger-hover: #d70015;
   --danger-active: #a50011;
@@ -23,8 +23,6 @@
   --warning: #ff9f0a;
   --warning-hover: #cc7f08;
   --warning-active: #995f06;
-  --sys-color: #8b5cf6;
-  --json-key-color: #a78bfa;
   --text-muted: #6e6e73;
   --text-secondary-light: #424245;
   --border-warm: rgba(15, 0, 0, 0.12);

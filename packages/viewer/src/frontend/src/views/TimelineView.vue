@@ -149,6 +149,7 @@ interface Metadata {
   };
   durationStats?: {
     wallTime: number;
+    agentTime: number;
     totalRequestDuration: number;
   };
   latencyStats?: {
@@ -227,6 +228,10 @@ const metadataSections = computed(() => {
       {
         key: "Wall Time",
         value: formatDuration(metadata.value.durationStats.wallTime),
+      },
+      {
+        key: "Agent Time",
+        value: formatDuration(metadata.value.durationStats.agentTime),
       },
       {
         key: "Request Time",
@@ -518,17 +523,17 @@ watch(refreshKey, () => {
   font-size: 11px;
   font-weight: 700;
   padding: 1px 6px;
-  border-radius: 2px;
+  border-radius: var(--radius);
 }
 
 .call-type.user {
-  background: rgba(61, 139, 255, 0.15);
+  background: rgba(0, 122, 255, 0.15);
   color: var(--accent);
 }
 
 .call-type.agent {
-  background: rgba(139, 92, 246, 0.15);
-  color: var(--sys-color);
+  background: rgba(154, 152, 152, 0.15);
+  color: var(--oc-mid);
 }
 
 .url {
@@ -549,7 +554,7 @@ watch(refreshKey, () => {
 }
 
 .time-badge.dur {
-  background: rgba(61, 139, 255, 0.1);
+  background: rgba(0, 122, 255, 0.1);
   color: var(--accent);
 }
 

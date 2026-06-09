@@ -626,7 +626,7 @@ defineExpose({ loadSessions });
   position: absolute;
   right: 4px;
   padding: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
 }
@@ -856,7 +856,7 @@ defineExpose({ loadSessions });
 .batch-toggle-btn.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--oc-light);
 }
 
 .batch-delete-btn {
@@ -867,7 +867,7 @@ defineExpose({ loadSessions });
   border: 1px solid var(--danger);
   border-radius: var(--radius);
   background: var(--danger);
-  color: #fff;
+  color: var(--oc-light);
   font-family: var(--font-family);
   font-size: 13px;
   font-weight: 500;

@@ -356,24 +356,24 @@ onMounted(loadRecord);
 <style scoped>
 .view-toggle {
   display: flex;
-  gap: 4px;
   margin-top: 16px;
   margin-bottom: 16px;
-  padding: 4px;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius);
   width: fit-content;
+  border-bottom: 1px solid var(--border);
 }
 
 .view-toggle button {
-  padding: 6px 16px;
-  border-radius: var(--radius);
-  font-size: 13px;
+  padding: 8px 16px;
+  font-size: 16px;
   font-weight: 500;
+  line-height: 1.0;
   color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
   transition:
-    background 0.1s,
-    color 0.1s;
+    color 0.1s,
+    border-color 0.1s;
 }
 
 .view-toggle button:hover {
@@ -381,9 +381,8 @@ onMounted(loadRecord);
 }
 
 .view-toggle button.active {
-  background: var(--bg-primary);
   color: var(--text-primary);
-  font-weight: 700;
+  border-bottom-color: var(--oc-mid);
 }
 
 .record-view-content {

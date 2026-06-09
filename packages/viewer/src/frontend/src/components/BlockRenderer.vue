@@ -190,16 +190,16 @@ function renderMarkdown(text: string): string {
   font-weight: 700;
   font-size: 11px;
   padding: 1px 6px;
-  border-radius: 2px;
+  border-radius: var(--radius);
 }
 
 .block-type-tag.text {
-  background: rgba(61, 139, 255, 0.15);
+  background: rgba(0, 122, 255, 0.15);
   color: var(--accent);
 }
 .block-type-tag.thinking {
-  background: rgba(139, 92, 246, 0.15);
-  color: var(--sys-color);
+  background: rgba(154, 152, 152, 0.15);
+  color: var(--oc-mid);
 }
 .block-type-tag.td {
   background: rgba(255, 159, 10, 0.15);
@@ -219,7 +219,7 @@ function renderMarkdown(text: string): string {
 }
 .block-type-tag.json {
   background: rgba(167, 139, 250, 0.15);
-  color: var(--json-key-color);
+  color: var(--oc-mid);
 }
 .block-type-tag.xml {
   background: rgba(255, 159, 10, 0.15);
@@ -243,7 +243,7 @@ function renderMarkdown(text: string): string {
   font-size: 11px;
   font-weight: 700;
   padding: 2px 6px;
-  border-radius: 2px;
+  border-radius: var(--radius);
   color: var(--text-tertiary);
   transition:
     color 0.1s,
@@ -253,7 +253,7 @@ function renderMarkdown(text: string): string {
 .toggle-btn:hover,
 .toggle-btn.active {
   color: var(--accent);
-  background: rgba(61, 139, 255, 0.1);
+  background: rgba(0, 122, 255, 0.1);
 }
 
 .block-content {
@@ -281,7 +281,7 @@ function renderMarkdown(text: string): string {
   top: 6px;
   right: 6px;
   padding: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius);
   opacity: 0;
   transition: opacity 0.1s;
   z-index: 1;

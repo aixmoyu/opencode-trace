@@ -44,6 +44,7 @@ export const LatencyStatsSchema = z.object({
 
 export const DurationStatsSchema = z.object({
   wallTime: z.number(),
+  agentTime: z.number(),
   totalRequestDuration: z.number(),
 });
 

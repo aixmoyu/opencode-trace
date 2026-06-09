@@ -639,6 +639,7 @@ describe("buildSessionMetadata", () => {
 
     expect(result.durationStats).toBeDefined();
     expect(result.durationStats?.wallTime).toBe(8000);
+    expect(result.durationStats?.agentTime).toBe(5000);
     expect(result.durationStats?.totalRequestDuration).toBe(5000);
   });
 

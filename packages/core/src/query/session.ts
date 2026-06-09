@@ -112,7 +112,7 @@ export function diffConversations(
     }
   }
 
-  const isUserCall = checkIsUserCall(requestMsgs ?? curr.msgs);
+  const isUserCall = checkIsUserCall(requestMsgs ?? extractRequestMsgs(curr));
 
   return {
     requestId: currRequestId,
@@ -139,7 +139,7 @@ function buildInitialChange(
     delta.msgs.push({ id: msg.id, added: msg.blocks, removed: [] });
   }
 
-  const isUserCall = checkIsUserCall(requestMsgs ?? conv.msgs);
+  const isUserCall = checkIsUserCall(requestMsgs ?? extractRequestMsgs(conv));
 
   return { requestId, delta, interRequestDuration: null, isUserCall };
 }
@@ -148,7 +148,13 @@ function checkIsUserCall(msgs: Entry[]): boolean {
   if (msgs.length === 0) return false;
   const lastMsg = msgs[msgs.length - 1];
   if (!lastMsg.blocks || lastMsg.blocks.length === 0) return false;
-  return lastMsg.blocks.some((b) => b.type === "text");
+  if (lastMsg.role === "tool") return false;
+  if (lastMsg.blocks.some((b) => b.type === "tr" || b.type === "tc")) return false;
+  return lastMsg.blocks.some((b) => b.type === "text" || b.type === "image");
+}
+
+function extractRequestMsgs(conv: Conversation): Entry[] {
+  return conv.msgs.filter((m) => m.role !== "assistant");
 }
 
 export function buildSessionTimeline(
@@ -194,7 +200,7 @@ export function buildSessionTimeline(
 
 export function buildSessionMetadata(
   sessionId: string,
-  records: { id: number; record?: TraceRecord; parsed: Conversation }[],
+  records: { id: number; record?: TraceRecord; parsed: Conversation; requestAt?: string; responseAt?: string }[],
   folderPath?: string,
 ): SessionMetadata {
   let inputMissTokens = 0;
@@ -207,6 +213,9 @@ export function buildSessionMetadata(
   const requestAtValues: string[] = [];
   const responseAtValues: string[] = [];
   const requestDurations: number[] = [];
+  const isUserCallList: boolean[] = [];
+
+  let prevResponseAtTime: number | null = null;
 
   for (const rec of records) {
     const usage = rec.parsed.usage;
@@ -222,16 +231,22 @@ export function buildSessionMetadata(
         if (latency.ttft != null) ttftValues.push(latency.ttft);
         if (latency.tpot != null) tpotValues.push(latency.tpot);
       }
-
-      if (rec.record.requestAt && rec.record.responseAt) {
-        requestAtValues.push(rec.record.requestAt);
-        responseAtValues.push(rec.record.responseAt);
-        const duration =
-          new Date(rec.record.responseAt).getTime() -
-          new Date(rec.record.requestAt).getTime();
-        requestDurations.push(duration);
-      }
     }
+
+    const effectiveRequestAt = rec.requestAt ?? rec.record?.requestAt;
+    const effectiveResponseAt = rec.responseAt ?? rec.record?.responseAt;
+    if (effectiveRequestAt && effectiveResponseAt) {
+      requestAtValues.push(effectiveRequestAt);
+      responseAtValues.push(effectiveResponseAt);
+      const duration =
+        new Date(effectiveResponseAt).getTime() -
+        new Date(effectiveRequestAt).getTime();
+      requestDurations.push(duration);
+      prevResponseAtTime = new Date(effectiveResponseAt).getTime();
+    }
+
+    const isUser = checkIsUserCall(extractRequestMsgs(rec.parsed));
+    isUserCallList.push(isUser);
   }
 
   const totalTokens = inputMissTokens + inputHitTokens + outputTokens;
@@ -268,8 +283,18 @@ export function buildSessionMetadata(
       new Date(maxResponseAt).getTime() - new Date(minRequestAt).getTime();
     const totalRequestDuration = requestDurations.reduce((a, b) => a + b, 0);
 
+    let agentTime = totalRequestDuration;
+    for (let i = 1; i < requestAtValues.length; i++) {
+      if (!isUserCallList[i]) {
+        const prevRespTime = new Date(responseAtValues[i - 1]).getTime();
+        const currReqTime = new Date(requestAtValues[i]).getTime();
+        agentTime += Math.max(0, currReqTime - prevRespTime);
+      }
+    }
+
     durationStats = {
       wallTime,
+      agentTime,
       totalRequestDuration,
     };
   }

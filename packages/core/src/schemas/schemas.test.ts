@@ -242,7 +242,7 @@ describe("SessionMetadataSchema", () => {
         maxTPOT: 0.2,
         streamRequestCount: 3,
       },
-      durationStats: { wallTime: 60000, totalRequestDuration: 30000 },
+      durationStats: { wallTime: 60000, agentTime: 30000, totalRequestDuration: 30000 },
     });
     expect(result.success).toBe(true);
   });

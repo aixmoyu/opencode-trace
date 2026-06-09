@@ -76,7 +76,7 @@ const baseMetadata = {
     totalTokens: 350,
     cacheHitRate: 0.333,
   },
-  durationStats: { wallTime: 8000, totalRequestDuration: 5000 },
+  durationStats: { wallTime: 8000, agentTime: 5000, totalRequestDuration: 5000 },
 };
 
 async function mountTimeline() {

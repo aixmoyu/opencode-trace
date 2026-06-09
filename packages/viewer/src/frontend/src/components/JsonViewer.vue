@@ -96,7 +96,7 @@ function copyContent() {
   top: 6px;
   right: 6px;
   padding: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius);
   opacity: 0;
   transition: opacity 0.1s;
   z-index: 1;

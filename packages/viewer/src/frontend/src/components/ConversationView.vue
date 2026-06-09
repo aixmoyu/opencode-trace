@@ -185,19 +185,19 @@ const hasContent = computed(() => {
   font-size: 11px;
   font-weight: 700;
   padding: 1px 6px;
-  border-radius: 2px;
+  border-radius: var(--radius);
 }
 
 .cat-tag.sys {
-  background: rgba(139, 92, 246, 0.15);
-  color: var(--sys-color);
+  background: rgba(154, 152, 152, 0.15);
+  color: var(--oc-mid);
 }
 .cat-tag.tool {
   background: rgba(255, 159, 10, 0.15);
   color: var(--warning);
 }
 .cat-tag.msg {
-  background: rgba(61, 139, 255, 0.15);
+  background: rgba(0, 122, 255, 0.15);
   color: var(--accent);
 }
 

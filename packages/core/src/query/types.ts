@@ -43,6 +43,7 @@ export interface LatencyStats {
 
 export interface DurationStats {
   wallTime: number;
+  agentTime: number;
   totalRequestDuration: number;
 }
 

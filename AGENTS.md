@@ -39,8 +39,53 @@ npx tsc --noEmit        # type-check all packages (CI lint job)
 - **Clean always** after stale builds: `rm -rf dist *.tsbuildinfo` — tsbuildinfo files cause `tsc -b` to skip rebuilding
 - **Viewer build is two-phase**: `tsc` (server) → `npm run build:frontend` (Vite/vue → `dist/public/`)
 - **Viewer tsconfig** excludes `src/frontend/` — the Vue app has its own Vite build
-- **Publishing order** (CI): core → cli → plugin → viewer. Skips if version already published.
 - No eslint, prettier, or formatter config exists in this repo.
+
+## Release Process
+
+Monorepo versioning is managed by [Changesets](https://github.com/changesets/changesets).
+**Do NOT manually edit `version` fields in any `packages/*/package.json`** — Changesets owns them.
+
+### Developer Workflow
+
+1. After making code changes, declare the change:
+
+   ```bash
+   npx changeset
+   ```
+
+   Interactive prompt: pick affected packages (space-separated) → bump level (major/minor/patch) → changelog message.
+   This creates `.changeset/<random-name>.md` — **commit this file with the PR**.
+
+2. Open a PR to `main`. CI runs normal build + tests.
+
+3. On merge, `.github/workflows/changesets.yml` detects pending changesets and automatically
+   opens/updates a **`Version Packages`** PR containing the version bumps, internal dependency
+   updates, and `CHANGELOG.md` entries for each affected package.
+
+4. Merge the `Version Packages` PR → the same workflow publishes to npm
+   (in dependency order: `core` → `cli` → `plugin` → `viewer`, skipping already-published versions)
+   and creates a GitHub Release with provenance.
+
+### Internal Dependency Sync
+
+`config.json` has `updateInternalDependencies: "patch"`. When `core` is bumped, the
+`"@opencode-trace/core": "x.y.z"` reference in `cli` / `plugin` / `viewer`
+is auto-bumped in the `Version Packages` PR. No manual cross-package edits.
+
+### Local Manual Escape Hatch
+
+If CI is unavailable, you can do the whole flow locally:
+
+```bash
+npm run version      # bump versions + sync internal deps + generate CHANGELOG
+npm run release      # build + publish to npm (requires NPM_TOKEN env)
+```
+
+### Required GitHub Secrets
+
+- `NPM_TOKEN` — npm automation token (publishing)
+- `GITHUB_TOKEN` — auto-provided, used for the `Version Packages` PR
 
 ## Windows CI Compatibility (IMPORTANT)
 

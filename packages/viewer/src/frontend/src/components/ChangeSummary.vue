@@ -102,19 +102,19 @@ function renderCategorySummary(
   font-size: 11px;
   font-weight: 700;
   padding: 1px 5px;
-  border-radius: 2px;
+  border-radius: var(--radius);
 }
 
 .cs-label.sys {
-  background: rgba(139, 92, 246, 0.15);
-  color: var(--sys-color);
+  background: rgba(154, 152, 152, 0.15);
+  color: var(--oc-mid);
 }
 .cs-label.tool {
   background: rgba(255, 159, 10, 0.15);
   color: var(--warning);
 }
 .cs-label.msg {
-  background: rgba(61, 139, 255, 0.15);
+  background: rgba(0, 122, 255, 0.15);
   color: var(--accent);
 }
 
